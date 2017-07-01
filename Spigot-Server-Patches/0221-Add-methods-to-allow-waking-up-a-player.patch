@@ -1,0 +1,44 @@
+From 3f97f390ba51a07776cfa9be6296518b57c6eaf6 Mon Sep 17 00:00:00 2001
+From: Shane Freeder <theboyetronic@gmail.com>
+Date: Fri, 30 Jun 2017 19:22:04 +0100
+Subject: [PATCH] Add methods to allow waking up a player
+
+
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index be94d0a0a..01255eca2 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -688,6 +688,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+         return entityhuman_enumbedresult;
+     }
+ 
++    public void wakeUpPlayer(boolean immediately, boolean updateWorldFlag, boolean setWorldSpawn) { this.a(immediately, updateWorldFlag, setWorldSpawn);} // Paper - OBFHELPER
+     public void a(boolean flag, boolean flag1, boolean flag2) {
+         if (!this.sleeping) return; // CraftBukkit - Can't leave bed if not in one!
+         if (this.isSleeping()) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index 28e00da32..172123340 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -666,6 +666,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+         return getHandle().fauxSleeping;
+     }
+ 
++    // Paper start
++    @Override
++    public void wakeUpPlayer(boolean setWorldSpawn) {
++        wakeUpPlayer(setWorldSpawn, true);
++    }
++
++    @Override
++    public void wakeUpPlayer(boolean setWorldSpawn, boolean updateWorld) {
++        getHandle().wakeUpPlayer(true, setWorldSpawn, updateWorld);
++    }
++    // Paper end
++
+     @Override
+     public void awardAchievement(Achievement achievement) {
+         throw new UnsupportedOperationException("Not supported in this Minecraft version.");
+-- 
+2.13.2
+

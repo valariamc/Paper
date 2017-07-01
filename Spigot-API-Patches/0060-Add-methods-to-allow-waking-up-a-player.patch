@@ -1,0 +1,39 @@
+From 9fe1e7fcf3628c66c12a76c99f3fc6ca96ac8959 Mon Sep 17 00:00:00 2001
+From: Shane Freeder <theboyetronic@gmail.com>
+Date: Fri, 30 Jun 2017 19:22:00 +0100
+Subject: [PATCH] Add methods to allow waking up a player
+
+
+diff --git a/src/main/java/org/bukkit/entity/Player.java b/src/main/java/org/bukkit/entity/Player.java
+index 0c3eb03f..fe10c07b 100644
+--- a/src/main/java/org/bukkit/entity/Player.java
++++ b/src/main/java/org/bukkit/entity/Player.java
+@@ -195,6 +195,25 @@ public interface Player extends HumanEntity, Conversable, CommandSender, Offline
+      */
+     public boolean isSleepingIgnored();
+ 
++    // Paper start
++    /**
++     * Wake the player up from sleep effectively calling {@link Player#wakeUpPlayer(boolean, boolean) wakeUpPlayer(setWorldSpawn, true)}
++     *
++     * @param setWorldSpawn should we update the players bed spawn point
++     */
++    void wakeUpPlayer(boolean setWorldSpawn);
++
++    /**
++     * Wake the player up from sleep.
++     *
++     * This method provides the ability to set if the "are enough players sleeping" flag should be updated
++     *
++     * @param setWorldSpawn should we update the players bed spawn point
++     * @param updateWorld Should the server update the worlds deep sleep state
++     */
++    void wakeUpPlayer(boolean setWorldSpawn, boolean updateWorld);
++    // Paper end
++
+     /**
+      * Play a note for a player at a location. This requires a note block
+      * at the particular location (as far as the client is concerned). This
+-- 
+2.13.2
+
