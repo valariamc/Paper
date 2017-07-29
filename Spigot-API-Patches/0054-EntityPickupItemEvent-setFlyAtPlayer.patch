@@ -1,9 +1,50 @@
-From a53027c798480be3017e4e592c0f8667e63bc612 Mon Sep 17 00:00:00 2001
+From 6e610c8f4254b402ecc0c28cc788339c1dad3ff5 Mon Sep 17 00:00:00 2001
 From: BillyGalbreath <Blake.Galbreath@GMail.com>
 Date: Sun, 7 May 2017 06:26:01 -0500
-Subject: [PATCH] PlayerPickupItemEvent#setFlyAtPlayer
+Subject: [PATCH] EntityPickupItemEvent#setFlyAtPlayer
+ PlayerPickupItemEvent#setFlyAtPlayer retained for compat
 
 
+diff --git a/src/main/java/org/bukkit/event/entity/EntityPickupItemEvent.java b/src/main/java/org/bukkit/event/entity/EntityPickupItemEvent.java
+index 20f2d538..37434187 100644
+--- a/src/main/java/org/bukkit/event/entity/EntityPickupItemEvent.java
++++ b/src/main/java/org/bukkit/event/entity/EntityPickupItemEvent.java
+@@ -13,6 +13,7 @@ public class EntityPickupItemEvent extends EntityEvent implements Cancellable {
+     private final Item item;
+     private boolean cancel = false;
+     private final int remaining;
++    private boolean flyAtEntity = true;
+ 
+     public EntityPickupItemEvent(final LivingEntity entity, final Item item, final int remaining) {
+         super(entity);
+@@ -43,6 +44,27 @@ public class EntityPickupItemEvent extends EntityEvent implements Cancellable {
+         return remaining;
+     }
+ 
++    // Paper Start
++    /**
++     * Set if the item will fly at the entity
++     * <p>Cancelling the event will set this value to false.</p>
++     *
++     * @param flyAtEntity True for item to fly at entity
++     */
++    public void setFlyAtEntity(boolean flyAtEntity) {
++        this.flyAtEntity = flyAtEntity;
++    }
++
++    /**
++     * Gets if the item will fly at the entity
++     *
++     * @return True if the item will fly at the entity
++     */
++    public boolean getFlyAtEntity() {
++        return flyAtEntity;
++    }
++    // Paper End
++
+     public boolean isCancelled() {
+         return cancel;
+     }
 diff --git a/src/main/java/org/bukkit/event/player/PlayerPickupItemEvent.java b/src/main/java/org/bukkit/event/player/PlayerPickupItemEvent.java
 index 29f03f5d..da19009b 100644
 --- a/src/main/java/org/bukkit/event/player/PlayerPickupItemEvent.java
