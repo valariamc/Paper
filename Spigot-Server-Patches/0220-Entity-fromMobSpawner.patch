@@ -1,14 +1,14 @@
-From 69193e9240f2c55715208ca6341f085a2b1cabca Mon Sep 17 00:00:00 2001
+From 322fabd766c5666563753a292b71722bd12e6e9c Mon Sep 17 00:00:00 2001
 From: BillyGalbreath <Blake.Galbreath@GMail.com>
 Date: Sun, 18 Jun 2017 18:17:05 -0500
 Subject: [PATCH] Entity#fromMobSpawner()
 
 
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 5a4de30fe..2dbb88f2d 100644
+index a73ec649..7b17c32b 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
-@@ -183,6 +183,7 @@ public abstract class Entity implements ICommandListener, KeyedObject { // Paper
+@@ -170,6 +170,7 @@ public abstract class Entity implements ICommandListener, KeyedObject { // Paper
      public final boolean defaultActivationState;
      public long activatedTick = Integer.MIN_VALUE;
      public boolean fromMobSpawner;
@@ -16,7 +16,7 @@ index 5a4de30fe..2dbb88f2d 100644
      protected int numCollisions = 0; // Paper
      public void inactiveTick() { }
      // Spigot end
-@@ -1603,6 +1604,10 @@ public abstract class Entity implements ICommandListener, KeyedObject { // Paper
+@@ -1590,6 +1591,10 @@ public abstract class Entity implements ICommandListener, KeyedObject { // Paper
              if (origin != null) {
                  nbttagcompound.set("Paper.Origin", this.createList(origin.getX(), origin.getY(), origin.getZ()));
              }
@@ -27,7 +27,7 @@ index 5a4de30fe..2dbb88f2d 100644
              // Paper end
              return nbttagcompound;
          } catch (Throwable throwable) {
-@@ -1752,6 +1757,8 @@ public abstract class Entity implements ICommandListener, KeyedObject { // Paper
+@@ -1739,6 +1744,8 @@ public abstract class Entity implements ICommandListener, KeyedObject { // Paper
              if (!originTag.isEmpty()) {
                  origin = new Location(world.getWorld(), originTag.getDoubleAt(0), originTag.getDoubleAt(1), originTag.getDoubleAt(2));
              }
@@ -37,7 +37,7 @@ index 5a4de30fe..2dbb88f2d 100644
  
          } catch (Throwable throwable) {
 diff --git a/src/main/java/net/minecraft/server/MobSpawnerAbstract.java b/src/main/java/net/minecraft/server/MobSpawnerAbstract.java
-index a5261d70b..1ed0def1e 100644
+index a5261d70..1ed0def1 100644
 --- a/src/main/java/net/minecraft/server/MobSpawnerAbstract.java
 +++ b/src/main/java/net/minecraft/server/MobSpawnerAbstract.java
 @@ -107,6 +107,7 @@ public abstract class MobSpawnerAbstract {
@@ -49,7 +49,7 @@ index a5261d70b..1ed0def1e 100644
                          if ( entity.world.spigotConfig.nerfSpawnerMobs )
                          {
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index 3b25b8b73..bf7e6ed3f 100644
+index 3b25b8b7..bf7e6ed3 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -800,5 +800,10 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {

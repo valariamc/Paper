@@ -1,0 +1,53 @@
+From bed32010871306da2e045c09c179c68257e0f218 Mon Sep 17 00:00:00 2001
+From: Shane Freeder <theboyetronic@gmail.com>
+Date: Mon, 23 Jul 2018 09:09:22 +0100
+Subject: [PATCH] Configurable option to increase tab spam limiter
+
+In 1.13, clients will send a tab competion packet to the server each
+character a player types for a command with an unknown completion,
+This can cause varying issues for commands such as messaging.
+
+While this patch may allow you to increase, or even disable the limit,
+doing so will leave the door further open for people to potentially cause
+performance issues on servers, especially when used with some plugins.
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index 62bce180..18a0d6f8 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -299,4 +299,14 @@ public class PaperConfig {
+             Bukkit.getLogger().log(Level.INFO, "Using Aikar's Alternative Luck Formula to apply Luck attribute to all loot pool calculations. See https://luckformula.emc.gs");
+         }
+     }
++
++    public static boolean increaseTabSpamLimit = false;
++    public static boolean disableTabSpamLimit = false;
++    private static void setIncreaseTabSpamLimit() {
++        increaseTabSpamLimit = getBoolean("settings.increased-tab-spam-limit", increaseTabSpamLimit);
++        increaseTabSpamLimit = getBoolean("settings.disable-tab-spam-limit", increaseTabSpamLimit);
++        if (increaseTabSpamLimit || disableTabSpamLimit) {
++            Bukkit.getLogger().log(Level.INFO, "Tab spam restrictions weakened/disabled! while this may permit newer clients using ~unsupported~ plugins, this opens the door to further complications");
++        }
++    }
+ }
+diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
+index cc115273..cb5e8cf0 100644
+--- a/src/main/java/net/minecraft/server/PlayerConnection.java
++++ b/src/main/java/net/minecraft/server/PlayerConnection.java
+@@ -2280,8 +2280,12 @@ public class PlayerConnection implements PacketListenerPlayIn, ITickable {
+ 
+     // Paper start - async tab completion
+     public void a(PacketPlayInTabComplete packet) {
++        // Paper start - increase tab spam limit
++        boolean increasedSpamLimit = com.destroystokyo.paper.PaperConfig.increaseTabSpamLimit;
++        boolean disableSpamLimit = com.destroystokyo.paper.PaperConfig.disableTabSpamLimit;
+         // CraftBukkit start
+-        if (chatSpamField.addAndGet(this, 10) > 500 && !this.minecraftServer.getPlayerList().isOp(this.player.getProfile())) {
++        if (disableSpamLimit || chatSpamField.addAndGet(this, increasedSpamLimit ? 1 : 10) > (increasedSpamLimit ? 1500 : 500) && !this.minecraftServer.getPlayerList().isOp(this.player.getProfile())) {
++            // Paper end
+             minecraftServer.postToMainThread(() -> this.disconnect(new ChatMessage("disconnect.spam", new Object[0])));
+             return;
+         }
+-- 
+2.18.0
+
