@@ -1,19 +1,19 @@
-From 631b3e9d4a7a908df94994d6d25987747e313a54 Mon Sep 17 00:00:00 2001
+From 63273cedd8ca83f385526a3ec581187744291d93 Mon Sep 17 00:00:00 2001
 From: Aikar <aikar@aikar.co>
 Date: Sun, 3 Jun 2018 04:10:13 -0400
 Subject: [PATCH] PotionEffect clone methods
 
 
 diff --git a/src/main/java/org/bukkit/potion/PotionEffect.java b/src/main/java/org/bukkit/potion/PotionEffect.java
-index 86616f1b..efb55d29 100644
+index d57450c9..5a22fb04 100644
 --- a/src/main/java/org/bukkit/potion/PotionEffect.java
 +++ b/src/main/java/org/bukkit/potion/PotionEffect.java
-@@ -100,6 +100,27 @@ public class PotionEffect implements ConfigurationSerializable {
+@@ -103,6 +103,27 @@ public class PotionEffect implements ConfigurationSerializable {
          this(getEffectType(map), getInt(map, DURATION), getInt(map, AMPLIFIER), getBool(map, AMBIENT, false), getBool(map, PARTICLES, true), getBool(map, ICON, getBool(map, PARTICLES, true)));
      }
  
 +    // Paper start
-+    public PotionEffect withType(PotionEffectType type) {
++    public PotionEffect withType(@NotNull PotionEffectType type) {
 +        return new PotionEffect(type, duration, amplifier, ambient, particles, icon);
 +    }
 +    public PotionEffect withDuration(int duration) {
@@ -33,9 +33,9 @@ index 86616f1b..efb55d29 100644
 +    }
 +    // Paper end
 +
-     private static PotionEffectType getEffectType(Map<?, ?> map) {
+     @NotNull
+     private static PotionEffectType getEffectType(@NotNull Map<?, ?> map) {
          int type = getInt(map, TYPE);
-         PotionEffectType effect = PotionEffectType.getById(type);
 -- 
-2.20.1
+2.21.0
 

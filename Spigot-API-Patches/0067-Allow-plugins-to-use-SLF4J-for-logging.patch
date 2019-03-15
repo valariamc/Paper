@@ -1,4 +1,4 @@
-From 83b0d804b7335d31c3ff87a7070c401dc869d824 Mon Sep 17 00:00:00 2001
+From a8ef06877f5b053c166477993e91bd54b2530633 Mon Sep 17 00:00:00 2001
 From: Minecrell <minecrell@minecrell.net>
 Date: Thu, 21 Sep 2017 16:33:12 +0200
 Subject: [PATCH] Allow plugins to use SLF4J for logging
@@ -14,13 +14,13 @@ it without having to shade it in the plugin and going through
 several layers of logging abstraction.
 
 diff --git a/pom.xml b/pom.xml
-index 84ba2076..3ebc6287 100644
+index 082f2f0c..13cdc25f 100644
 --- a/pom.xml
 +++ b/pom.xml
-@@ -103,6 +103,14 @@
-             <scope>compile</scope>
+@@ -109,6 +109,13 @@
+             <version>17.0.0</version>
+             <scope>provided</scope>
          </dependency>
- 
 +        <!-- Paper - Add SLF4J -->
 +        <dependency>
 +            <groupId>org.slf4j</groupId>
@@ -28,16 +28,15 @@ index 84ba2076..3ebc6287 100644
 +            <version>1.7.25</version>
 +            <scope>compile</scope>
 +        </dependency>
-+
          <!-- testing -->
          <dependency>
              <groupId>junit</groupId>
 diff --git a/src/main/java/org/bukkit/plugin/Plugin.java b/src/main/java/org/bukkit/plugin/Plugin.java
-index 55debf5d..8d2999ac 100644
+index 076ec041..330d5a71 100644
 --- a/src/main/java/org/bukkit/plugin/Plugin.java
 +++ b/src/main/java/org/bukkit/plugin/Plugin.java
-@@ -157,6 +157,12 @@ public interface Plugin extends TabExecutor {
-      */
+@@ -167,6 +167,12 @@ public interface Plugin extends TabExecutor {
+     @NotNull
      public Logger getLogger();
  
 +    // Paper start - Add SLF4J logger
@@ -50,5 +49,5 @@ index 55debf5d..8d2999ac 100644
       * Returns the name of the plugin.
       * <p>
 -- 
-2.20.1
+2.21.0
 
