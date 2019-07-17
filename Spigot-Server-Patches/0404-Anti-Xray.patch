@@ -1,4 +1,4 @@
-From 4832eff72f16e69dea647a4cbd70f8bca3329f1d Mon Sep 17 00:00:00 2001
+From f1a57c70410a61228dd4bb8fe5f54b220382f989 Mon Sep 17 00:00:00 2001
 From: stonar96 <minecraft.stonar96@gmail.com>
 Date: Mon, 20 Aug 2018 03:03:58 +0200
 Subject: [PATCH] Anti-Xray
@@ -1565,10 +1565,10 @@ index f0203d53c..b455b6102 100644
                  this.a(new PacketPlayOutMultiBlockChange(this.dirtyCount, this.dirtyBlocks, chunk), false);
  
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index d68c89817..89b72da82 100644
+index 3bb2d3f0a..54c4d3a6d 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-@@ -519,7 +519,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -532,7 +532,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                  PlayerChunkMap.LOGGER.error("Couldn't load chunk {}", chunkcoordintpair, exception);
              }
  
@@ -1577,7 +1577,7 @@ index d68c89817..89b72da82 100644
          }, this.executor);
      }
  
-@@ -1173,7 +1173,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1186,7 +1186,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      private void a(EntityPlayer entityplayer, Packet<?>[] apacket, Chunk chunk) {
          if (apacket[0] == null) {

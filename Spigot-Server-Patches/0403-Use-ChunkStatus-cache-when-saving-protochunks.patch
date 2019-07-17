@@ -1,4 +1,4 @@
-From 8a07db03b2e5b40c290abe1193fe7766ad0b8a44 Mon Sep 17 00:00:00 2001
+From 1f96d50d7edbf9ce3e724a3caf907e04859b7f80 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Sat, 22 Jun 2019 04:20:47 -0700
 Subject: [PATCH] Use ChunkStatus cache when saving protochunks
@@ -7,10 +7,10 @@ The cache should contain the chunk status when saving. If not it
 will load it.
 
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 4cf58e5ea..d68c89817 100644
+index c7445c675..3bb2d3f0a 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-@@ -748,8 +748,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -761,8 +761,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                  NBTTagCompound nbttagcompound;
  
                  if (chunkstatus.getType() != ChunkStatus.Type.LEVELCHUNK) {

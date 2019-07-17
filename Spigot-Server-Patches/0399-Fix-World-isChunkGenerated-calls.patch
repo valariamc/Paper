@@ -1,4 +1,4 @@
-From 925d47e674b12fe7c0286a433ceea07bc35d2de7 Mon Sep 17 00:00:00 2001
+From d088a7f843550afe8db9077e36aa3893fcaf4542 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Sat, 15 Jun 2019 08:54:33 -0700
 Subject: [PATCH] Fix World#isChunkGenerated calls
@@ -8,7 +8,7 @@ This patch also adds a chunk status cache on region files (note that
 its only purpose is to cache the status on DISK)
 
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index f2fd568d6..d76860daf 100644
+index 7f81cd49d..6c8e03361 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -27,7 +27,7 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -134,10 +134,10 @@ index a73c59b43..f0203d53c 100644
  
      public CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> getStatusFutureUnchecked(ChunkStatus chunkstatus) {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index a3e989f2b..4cf58e5ea 100644
+index 751afb35b..c7445c675 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-@@ -832,11 +832,56 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -845,11 +845,56 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      @Nullable

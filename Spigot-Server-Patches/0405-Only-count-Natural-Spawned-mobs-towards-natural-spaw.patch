@@ -1,4 +1,4 @@
-From 59dc0ea3ce3eb0ec7abcd18d556c78f8118d5cca Mon Sep 17 00:00:00 2001
+From e61ae037480e762a3ed02fa8873b3518a9800513 Mon Sep 17 00:00:00 2001
 From: Aikar <aikar@aikar.co>
 Date: Sun, 24 Mar 2019 01:01:32 -0400
 Subject: [PATCH] Only count Natural Spawned mobs towards natural spawn mob
@@ -38,10 +38,10 @@ index 929f5c303..ff520d9e8 100644
      public boolean asynchronous;
      public EngineMode engineMode;
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index c646393eb..959fc99bb 100644
+index 67b8646ca..b6bd883bf 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
-@@ -867,6 +867,13 @@ public class WorldServer extends World {
+@@ -895,6 +895,13 @@ public class WorldServer extends World {
                  EnumCreatureType enumcreaturetype = entity.getEntityType().d();
  
                  if (enumcreaturetype != EnumCreatureType.MISC && this.getChunkProvider().b(entity)) {
