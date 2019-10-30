@@ -1,12 +1,13 @@
-From c41ab1dad3a063b15b9ceb44645c0ef99ffbae24 Mon Sep 17 00:00:00 2001
+From 1caa27d9a8819d44d1a2754469103b5816d2ea02 Mon Sep 17 00:00:00 2001
 From: MisterErwin <git@askarian.net>
 Date: Wed, 30 Oct 2019 16:57:54 +0100
 Subject: [PATCH] Fix spawning of hanging entities that are not ItemFrames and
  can not face UP or DOWN
 
+https://hub.spigotmc.org/stash/projects/SPIGOT/repos/craftbukkit/commits/d65a2576e40e58c8e446b330febe6799d13a604f
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 243722b6..f33d9c8b 100644
+index 243722b67..f33d9c8b4 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -1784,7 +1784,12 @@ public class CraftWorld implements World {
@@ -24,5 +25,5 @@ index 243722b6..f33d9c8b 100644
              for (BlockFace dir : faces) {
                  IBlockData nmsBlock = world.getType(pos.shift(CraftBlock.blockFaceToNotch(dir)));
 -- 
-2.17.1
+2.23.0
 
