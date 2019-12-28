@@ -1,4 +1,4 @@
-From e7612923efe724f342d6bd9bdebac3574f24c03d Mon Sep 17 00:00:00 2001
+From 14ec6d00449901e56db79f88ba90b5f6e8a6989f Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 19 Jul 2019 03:29:14 -0700
 Subject: [PATCH] Reduce sync loads
@@ -268,10 +268,10 @@ index 000000000..59aec1032
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 4cdb8187e..36983b75e 100644
+index e5001154e..03054eea3 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-@@ -373,6 +373,7 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -375,6 +375,7 @@ public class ChunkProviderServer extends IChunkProvider {
                  this.world.asyncChunkTaskManager.raisePriority(x, z, com.destroystokyo.paper.io.PrioritizedTaskQueue.HIGHEST_PRIORITY);
                  com.destroystokyo.paper.io.chunk.ChunkTaskManager.pushChunkWait(this.world, x, z);
                  // Paper end

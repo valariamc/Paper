@@ -1,4 +1,4 @@
-From 3ecf453f20ece5198ed225ac6a72e527c57138c7 Mon Sep 17 00:00:00 2001
+From cd7daf674b195bde5f957cdfad12315268146fab Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Sat, 13 Jul 2019 09:23:10 -0700
 Subject: [PATCH] Asynchronous chunk IO and loading
@@ -2359,7 +2359,7 @@ index 000000000..59d73bfad
 +
 +}
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index ab0fd8ec8..4cdb8187e 100644
+index 9509d516f..e5001154e 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -219,11 +219,137 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -2500,7 +2500,7 @@ index ab0fd8ec8..4cdb8187e 100644
          if (Thread.currentThread() != this.serverThread) {
              return (IChunkAccess) CompletableFuture.supplyAsync(() -> {
                  return this.getChunkAt(i, j, chunkstatus, flag);
-@@ -243,8 +369,13 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -245,8 +371,13 @@ public class ChunkProviderServer extends IChunkProvider {
              CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> completablefuture = this.getChunkFutureMainThread(i, j, chunkstatus, flag);
  
              if (!completablefuture.isDone()) { // Paper
@@ -2514,7 +2514,7 @@ index ab0fd8ec8..4cdb8187e 100644
                  this.world.timings.chunkAwait.stopTiming(); // Paper
              } // Paper
              ichunkaccess = (IChunkAccess) ((Either) completablefuture.join()).map((ichunkaccess1) -> {
-@@ -702,11 +833,12 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -735,11 +866,12 @@ public class ChunkProviderServer extends IChunkProvider {
          protected boolean executeNext() {
          // CraftBukkit start - process pending Chunk loadCallback() and unloadCallback() after each run task
          try {
@@ -2948,10 +2948,10 @@ index 2f95174fc..134c76065 100644
 +//    Paper end
  }
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
-index 25a87c2d3..c02c53b50 100644
+index 14090e365..698f99889 100644
 --- a/src/main/java/net/minecraft/server/MCUtil.java
 +++ b/src/main/java/net/minecraft/server/MCUtil.java
-@@ -530,4 +530,9 @@ public final class MCUtil {
+@@ -603,4 +603,9 @@ public final class MCUtil {
              out.print(fileData);
          }
      }
@@ -3034,7 +3034,7 @@ index 448cbf0dc..054778d0b 100644
                  completablefuture = (CompletableFuture) this.statusFutures.get(i);
                  if (completablefuture != null) {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 026552291..726558c11 100644
+index bc2940745..4e8a9b77a 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -63,7 +63,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {

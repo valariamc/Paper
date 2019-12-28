@@ -1,14 +1,14 @@
-From d6b9c26c45c8300a90658ada3c280593e092116c Mon Sep 17 00:00:00 2001
+From 04b70a7b045bd9825845bcaec19b97d4fb0a2e15 Mon Sep 17 00:00:00 2001
 From: Shane Freeder <theboyetronic@gmail.com>
 Date: Wed, 29 May 2019 04:01:22 +0100
 Subject: [PATCH] ChunkMapDistance CME
 
 
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index a35f0e18b..8c1945687 100644
+index d8420bd34..9f98c6573 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-@@ -33,7 +33,7 @@ public abstract class ChunkMapDistance {
+@@ -32,7 +32,7 @@ public abstract class ChunkMapDistance {
      private final ChunkMapDistance.a e = new ChunkMapDistance.a();
      private final ChunkMapDistance.b f = new ChunkMapDistance.b(8);
      private final ChunkMapDistance.c g = new ChunkMapDistance.c(33);
@@ -17,7 +17,7 @@ index a35f0e18b..8c1945687 100644
      private final ChunkTaskQueueSorter i;
      private final Mailbox<ChunkTaskQueueSorter.a<Runnable>> j;
      private final Mailbox<ChunkTaskQueueSorter.b> k;
-@@ -94,26 +94,12 @@ public abstract class ChunkMapDistance {
+@@ -93,26 +93,12 @@ public abstract class ChunkMapDistance {
              ;
          }
  

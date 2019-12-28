@@ -1,4 +1,4 @@
-From 5f2667287dee0008c5ecc965d7fa06fde3876911 Mon Sep 17 00:00:00 2001
+From 0dd5b3153690257a51562d64498142789fcffcf6 Mon Sep 17 00:00:00 2001
 From: kickash32 <kickash32@gmail.com>
 Date: Mon, 19 Aug 2019 01:27:58 +0500
 Subject: [PATCH] implement optional per player mob spawns
@@ -545,10 +545,10 @@ index 000000000..4f13d3ff8
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 36983b75e..ff3df4aab 100644
+index 03054eea3..6e0d1d949 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-@@ -617,7 +617,22 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -650,7 +650,22 @@ public class ChunkProviderServer extends IChunkProvider {
              this.world.timings.countNaturalMobs.startTiming(); // Paper - timings
              int l = this.chunkMapDistance.b();
              EnumCreatureType[] aenumcreaturetype = EnumCreatureType.values();
@@ -572,7 +572,7 @@ index 36983b75e..ff3df4aab 100644
  
              this.world.timings.countNaturalMobs.stopTiming(); // Paper - timings
              this.world.getMethodProfiler().exit();
-@@ -682,8 +697,23 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -715,8 +730,23 @@ public class ChunkProviderServer extends IChunkProvider {
                                  if (enumcreaturetype != EnumCreatureType.MISC && (!enumcreaturetype.c() || this.allowAnimals) && (enumcreaturetype.c() || this.allowMonsters) && (!enumcreaturetype.d() || flag2)) {
                                      int k1 = limit * l / ChunkProviderServer.b; // CraftBukkit - use per-world limits
  
@@ -643,7 +643,7 @@ index d49ad0308..2fb04e3e9 100644
          return this.bb;
      }
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 726558c11..8f5bb2037 100644
+index 4e8a9b77a..5d90ca690 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -78,7 +78,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {

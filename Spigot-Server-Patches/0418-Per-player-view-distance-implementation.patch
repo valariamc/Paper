@@ -1,4 +1,4 @@
-From 4af11a1edb55089833c67bf863c30d43c670accb Mon Sep 17 00:00:00 2001
+From a4e7c07e0a22b49904201e27b8d7454f28c2367a Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 27 Dec 2019 14:20:40 -0800
 Subject: [PATCH] Per player view distance implementation
@@ -70,18 +70,10 @@ index 1d7d1ffbf..45f7cf162 100644
 +    }
  }
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 8c1945687..ec28e394a 100644
+index 9f98c6573..2d38d8420 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-@@ -3,6 +3,7 @@ package net.minecraft.server;
- import com.google.common.collect.ImmutableList;
- import com.google.common.collect.Sets;
- import com.mojang.datafixers.util.Either;
-+import com.destroystokyo.paper.util.Util; // Paper
- import it.unimi.dsi.fastutil.longs.Long2ByteMap;
- import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
- import it.unimi.dsi.fastutil.longs.Long2IntMap;
-@@ -27,12 +28,12 @@ import org.apache.logging.log4j.Logger;
+@@ -26,12 +26,12 @@ import org.apache.logging.log4j.Logger;
  public abstract class ChunkMapDistance {
  
      private static final Logger LOGGER = LogManager.getLogger();
@@ -96,7 +88,7 @@ index 8c1945687..ec28e394a 100644
      private final java.util.Queue<PlayerChunk> pendingChunkUpdates = new java.util.LinkedList<>(); // PAIL pendingChunkUpdates // Paper - use a queue
      private final ChunkTaskQueueSorter i;
      private final Mailbox<ChunkTaskQueueSorter.a<Runnable>> j;
-@@ -41,6 +42,11 @@ public abstract class ChunkMapDistance {
+@@ -40,6 +40,11 @@ public abstract class ChunkMapDistance {
      private final Executor m;
      private long currentTick;
  
@@ -108,7 +100,7 @@ index 8c1945687..ec28e394a 100644
      protected ChunkMapDistance(Executor executor, Executor executor1) {
          executor1.getClass();
          Mailbox<Runnable> mailbox = Mailbox.a("player ticket throttler", executor1::execute);
-@@ -86,7 +92,7 @@ public abstract class ChunkMapDistance {
+@@ -85,7 +90,7 @@ public abstract class ChunkMapDistance {
  
      public boolean a(PlayerChunkMap playerchunkmap) {
          this.f.a();
@@ -117,7 +109,7 @@ index 8c1945687..ec28e394a 100644
          int i = Integer.MAX_VALUE - this.e.a(Integer.MAX_VALUE);
          boolean flag = i != 0;
  
-@@ -220,7 +226,7 @@ public abstract class ChunkMapDistance {
+@@ -219,7 +224,7 @@ public abstract class ChunkMapDistance {
              return new ObjectOpenHashSet();
          })).add(entityplayer);
          this.f.b(i, 0, true);
@@ -126,7 +118,7 @@ index 8c1945687..ec28e394a 100644
      }
  
      public void b(SectionPosition sectionposition, EntityPlayer entityplayer) {
-@@ -231,7 +237,7 @@ public abstract class ChunkMapDistance {
+@@ -230,7 +235,7 @@ public abstract class ChunkMapDistance {
          if (objectset.isEmpty()) {
              this.c.remove(i);
              this.f.b(i, Integer.MAX_VALUE, false);
@@ -135,7 +127,7 @@ index 8c1945687..ec28e394a 100644
          }
  
      }
-@@ -249,9 +255,195 @@ public abstract class ChunkMapDistance {
+@@ -248,9 +253,195 @@ public abstract class ChunkMapDistance {
          return s;
      }
  
@@ -170,7 +162,7 @@ index 8c1945687..ec28e394a 100644
 +        private final java.util.List<EntityPlayer> players = new java.util.ArrayList<>(256);
 +
 +        private boolean tryQueueChunk(int chunkX, int chunkZ, EntityPlayer player) {
-+            long coordinate = Util.getCoordinateKey(chunkX, chunkZ);
++            long coordinate = MCUtil.getCoordinateKey(chunkX, chunkZ);
 +            if (this.chunkReferenceMap.putIfAbsent(coordinate, player.getId()) == -1) {
 +                ChunkMapDistance.this.addTicket(coordinate, new Ticket<>(TicketType.PLAYER, ChunkMapDistance.getPlayerTicketLevel(), new ChunkCoordIntPair(chunkX, chunkZ)));
 +                return true;
@@ -192,13 +184,13 @@ index 8c1945687..ec28e394a 100644
 +                    continue;
 +                }
 +
-+                int newX = Util.getCoordinateX(currentChunkPos);
-+                int newZ = Util.getCoordinateZ(currentChunkPos);
++                int newX = MCUtil.getCoordinateX(currentChunkPos);
++                int newZ = MCUtil.getCoordinateZ(currentChunkPos);
 +
 +                // handle movement
 +                if (currentChunkPos != lastChunkPos && lastChunkPos != Long.MIN_VALUE) {
-+                    int oldX = Util.getCoordinateX(lastChunkPos);
-+                    int oldZ = Util.getCoordinateZ(lastChunkPos);
++                    int oldX = MCUtil.getCoordinateX(lastChunkPos);
++                    int oldZ = MCUtil.getCoordinateZ(lastChunkPos);
 +
 +                    int radiusDiff = Math.max(Math.abs(newX - oldX), Math.abs(newZ - oldZ));
 +                    lastLoadedRadius = Math.max(-1, lastLoadedRadius - radiusDiff);
@@ -307,7 +299,7 @@ index 8c1945687..ec28e394a 100644
 +        }
 +
 +        public void onChunkSetEntityTicking(int chunkX, int chunkZ) {
-+            long coordinate = Util.getCoordinateKey(chunkX, chunkZ);
++            long coordinate = MCUtil.getCoordinateKey(chunkX, chunkZ);
 +            int playerReference = this.chunkReferenceMap.get(coordinate);
 +            if (playerReference != -1) {
 +                this.pendingChunkLoadsByPlayer.computeIfPresent(playerReference, (Integer keyInMap, Integer valueInMap) -> {
@@ -318,7 +310,7 @@ index 8c1945687..ec28e394a 100644
 +
 +        // this is invoked if and only if there are no other players in range of the chunk.
 +        public void playerMoveOutOfRange(int chunkX, int chunkZ) {
-+            long coordinate = Util.getCoordinateKey(chunkX, chunkZ);
++            long coordinate = MCUtil.getCoordinateKey(chunkX, chunkZ);
 +            int playerReference = this.chunkReferenceMap.remove(coordinate);
 +            if (playerReference != -1) {
 +                this.pendingChunkLoadsByPlayer.computeIfPresent(playerReference, (Integer keyInMap, Integer valueInMap) -> {
@@ -333,10 +325,10 @@ index 8c1945687..ec28e394a 100644
      public int b() {
          this.f.a();
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index ff3df4aab..2f159a58a 100644
+index 6e0d1d949..97950c6b6 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-@@ -586,6 +586,14 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -619,6 +619,14 @@ public class ChunkProviderServer extends IChunkProvider {
          this.chunkMapDistance.purgeTickets();
          this.tickDistanceManager();
          this.world.timings.doChunkMap.stopTiming(); // Spigot
@@ -414,7 +406,7 @@ index 2e95069c1..aa4787d39 100644
                      double deltaX = this.locX() - player.locX();
                      double deltaZ = this.locZ() - player.locZ();
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 054778d0b..fcc95ae8e 100644
+index 054778d0b..0ff497ed7 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -292,9 +292,50 @@ public class PlayerChunk {
@@ -446,8 +438,8 @@ index 054778d0b..fcc95ae8e 100644
 +                    int viewDistance = viewDistanceMap.getLastViewDistance(player);
 +                    long lastPosition = viewDistanceMap.getLastCoordinate(player);
 +
-+                    int distX = Math.abs(com.destroystokyo.paper.util.Util.getCoordinateX(lastPosition) - this.location.x);
-+                    int distZ = Math.abs(com.destroystokyo.paper.util.Util.getCoordinateZ(lastPosition) - this.location.z);
++                    int distX = Math.abs(MCUtil.getCoordinateX(lastPosition) - this.location.x);
++                    int distZ = Math.abs(MCUtil.getCoordinateZ(lastPosition) - this.location.z);
 +
 +                    if (Math.max(distX, distZ) == viewDistance) {
 +                        player.playerConnection.sendPacket(packet);
@@ -482,7 +474,7 @@ index 054778d0b..fcc95ae8e 100644
                  }
                  return either;
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 8f5bb2037..90a03ab46 100644
+index 5d90ca690..a63da7513 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -78,7 +78,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -506,8 +498,8 @@ index 8f5bb2037..90a03ab46 100644
 +    public void updateViewDistance(EntityPlayer player, int viewDistance) {
 +        player.viewDistance = viewDistance;
 +
-+        int chunkX = com.destroystokyo.paper.util.Util.getChunkCoordinate(player.locX());
-+        int chunkZ = com.destroystokyo.paper.util.Util.getChunkCoordinate(player.locZ());
++        int chunkX = MCUtil.getChunkCoordinate(player.locX());
++        int chunkZ = MCUtil.getChunkCoordinate(player.locZ());
 +
 +        int effectiveViewDistance = viewDistance == -1 ? this.viewDistance : viewDistance;
 +
@@ -541,8 +533,8 @@ index 8f5bb2037..90a03ab46 100644
  
  
 @@ -127,7 +155,14 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
-         int chunkX = com.destroystokyo.paper.util.Util.getChunkCoordinate(player.locX());
-         int chunkZ = com.destroystokyo.paper.util.Util.getChunkCoordinate(player.locZ());
+         int chunkX = MCUtil.getChunkCoordinate(player.locX());
+         int chunkZ = MCUtil.getChunkCoordinate(player.locZ());
  
 -
 +        // Paper start - per player view distance
@@ -758,8 +750,8 @@ index 8f5bb2037..90a03ab46 100644
 -                    ChunkCoordIntPair chunkcoordintpair = new ChunkCoordIntPair(k2, l2);
 -                    boolean flag3 = a(chunkcoordintpair, i1, j1) <= this.viewDistance;
 -                    boolean flag4 = a(chunkcoordintpair, i, j) <= this.viewDistance;
-+                int distX = Math.abs(com.destroystokyo.paper.util.Util.getCoordinateX(lastPosition) - chunkcoordintpair.x);
-+                int distZ = Math.abs(com.destroystokyo.paper.util.Util.getCoordinateZ(lastPosition) - chunkcoordintpair.z);
++                int distX = Math.abs(MCUtil.getCoordinateX(lastPosition) - chunkcoordintpair.x);
++                int distZ = Math.abs(MCUtil.getCoordinateZ(lastPosition) - chunkcoordintpair.z);
  
 -                    this.sendChunk(entityplayer, chunkcoordintpair, new Packet[2], flag3, flag4);
 +                if (Math.max(distX, distZ) == viewDistance) {

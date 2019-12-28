@@ -1,4 +1,4 @@
-From bbfc78f117492d9562fd653dac740f441e1ac252 Mon Sep 17 00:00:00 2001
+From 300f77b0a549b27a886abc3533bb307bbd711719 Mon Sep 17 00:00:00 2001
 From: Zach Brown <zach.brown@destroystokyo.com>
 Date: Sat, 22 Sep 2018 15:56:59 -0400
 Subject: [PATCH] Catch JsonParseException in Entity and TE names
@@ -39,10 +39,10 @@ index b03316bc8..5d31068d7 100644
  
                      this.setCustomNameVisible(nbttagcompound.getBoolean("CustomNameVisible"));
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
-index 670f8313a..d49e210a3 100644
+index 4bf955c88..0da728f76 100644
 --- a/src/main/java/net/minecraft/server/MCUtil.java
 +++ b/src/main/java/net/minecraft/server/MCUtil.java
-@@ -339,4 +339,19 @@ public final class MCUtil {
+@@ -424,4 +424,19 @@ public final class MCUtil {
                  return null;
          }
      }

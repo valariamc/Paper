@@ -1,4 +1,4 @@
-From 8115ceb365f05ce1cf657f5afd0ce7b38fd16dbf Mon Sep 17 00:00:00 2001
+From 5226a44e4d95556a1355b3cf1cc63da9a0410715 Mon Sep 17 00:00:00 2001
 From: Shane Freeder <theboyetronic@gmail.com>
 Date: Sun, 9 Jun 2019 03:53:22 +0100
 Subject: [PATCH] incremental chunk saving
@@ -29,7 +29,7 @@ index 778de4630..99f1541b9 100644
 +    }
  }
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index e4c2cabed..a5acb17ca 100644
+index 659ee8243..65d66f607 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
 @@ -42,7 +42,7 @@ public class Chunk implements IChunkAccess {
@@ -42,10 +42,10 @@ index e4c2cabed..a5acb17ca 100644
      private long inhabitedTime;
      @Nullable
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index a27312ab4..21f838cff 100644
+index ede3e58a9..0b70ad09d 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-@@ -397,6 +397,15 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -430,6 +430,15 @@ public class ChunkProviderServer extends IChunkProvider {
          } // Paper - Timings
      }
  
@@ -175,7 +175,7 @@ index dfdbeea01..73311aeb5 100644
      public void a(ProtoChunkExtension protochunkextension) {
          for (int i = 0; i < this.statusFutures.length(); ++i) {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 44f3f8d5f..77147f0b1 100644
+index 7cae86c84..72e9626d5 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -331,6 +331,61 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -190,7 +190,7 @@ index 44f3f8d5f..77147f0b1 100644
 +            return ret;
 +        }
 +
-+        return Long.compare(com.destroystokyo.paper.util.Util.getCoordinateKey(playerchunk1.location), com.destroystokyo.paper.util.Util.getCoordinateKey(playerchunk2.location));
++        return Long.compare(MCUtil.getCoordinateKey(playerchunk1.location), MCUtil.getCoordinateKey(playerchunk2.location));
 +    });
 +    protected void saveIncrementally() {
 +        int savedThisTick = 0;
