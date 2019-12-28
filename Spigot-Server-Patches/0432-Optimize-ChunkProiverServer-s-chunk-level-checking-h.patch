@@ -1,0 +1,67 @@
+From 2c3e17d515c8b7aafbf2f1684a81f78545634122 Mon Sep 17 00:00:00 2001
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Fri, 27 Dec 2019 18:18:47 -0800
+Subject: [PATCH] Optimize ChunkProiverServer's chunk level checking helper
+ methods
+
+These can be hot functions (i.e entity ticking and block ticking),
+so inline where possible, and avoid the abstraction of the
+Either class.
+
+diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
+index f27a2724..6de9d920 100644
+--- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
++++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
+@@ -502,27 +502,39 @@ public class ChunkProviderServer extends IChunkProvider {
+ 
+     @Override
+     public boolean a(Entity entity) {
+-        long i = ChunkCoordIntPair.pair(MathHelper.floor(entity.locX()) >> 4, MathHelper.floor(entity.locZ()) >> 4);
+-
+-        return this.a(i, PlayerChunk::b);
++        // Paper start - optimize is ticking ready type functions
++        // is entity ticking ready
++        PlayerChunk playerChunk = this.getChunk(com.destroystokyo.paper.util.Util.getCoordinateKey(entity));
++        return playerChunk != null && playerChunk.isEntityTickingReady();
++        // Paper end
+     }
+ 
+     @Override
+     public boolean a(ChunkCoordIntPair chunkcoordintpair) {
+-        return this.a(chunkcoordintpair.pair(), PlayerChunk::b);
++        // Paper start - optimize is ticking ready type functions
++        // is entity ticking ready
++        PlayerChunk playerChunk = this.getChunk(com.destroystokyo.paper.util.Util.getCoordinateKey(chunkcoordintpair));
++        return playerChunk != null && playerChunk.isEntityTickingReady();
++        // Paper end
+     }
+ 
+     @Override
+     public boolean a(BlockPosition blockposition) {
+-        long i = ChunkCoordIntPair.pair(blockposition.getX() >> 4, blockposition.getZ() >> 4);
+-
+-        return this.a(i, PlayerChunk::a);
++        // Paper start - optimize is ticking ready type functions
++        // is ticking ready
++        PlayerChunk playerChunk = this.getChunk(com.destroystokyo.paper.util.Util.getCoordinateKey(blockposition));
++        return playerChunk != null && playerChunk.isTickingReady();
++        // Paper end
+     }
+ 
+     public boolean b(Entity entity) {
+-        long i = ChunkCoordIntPair.pair(MathHelper.floor(entity.locX()) >> 4, MathHelper.floor(entity.locZ()) >> 4);
+-
+-        return this.a(i, PlayerChunk::c);
++        // Paper start - optimize is ticking ready type functions
++        // is full chunk ready
++        if (Thread.currentThread() == this.serverThread) {
++            return this.getChunkAtIfLoadedMainThreadNoCache(com.destroystokyo.paper.util.Util.getChunkCoordinate(entity.locX()), com.destroystokyo.paper.util.Util.getChunkCoordinate(entity.locZ())) != null;
++        }
++        return this.getChunkAtIfLoadedImmediately(com.destroystokyo.paper.util.Util.getChunkCoordinate(entity.locX()), com.destroystokyo.paper.util.Util.getChunkCoordinate(entity.locZ())) != null;
++        // Paper start - optimize is ticking ready type functions
+     }
+ 
+     private boolean a(long i, Function<PlayerChunk, CompletableFuture<Either<Chunk, PlayerChunk.Failure>>> function) {
+-- 
+2.24.0.windows.2
+

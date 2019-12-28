@@ -1,0 +1,1545 @@
+From 25cdbaa11af7b92d16d43e507f082321ecb6af7e Mon Sep 17 00:00:00 2001
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Fri, 27 Dec 2019 12:58:12 -0800
+Subject: [PATCH] Reduce GC performance issues
+
+Patch dedicated to resolving gc performance issues
+
+- PathfinderGoalSelector showed up at the top in memory profiling due
+to streams
+
+- ChunkMapDistance showed up at the top too due to bad iterator usage
+
+- PlayerChunkMap#move and ChunkMap showed near the top when moving
+around due to avoidable ChunkCoordIntPair allocations
+
+- PathFinderNormal allocates a block position when checking the path
+type of a block
+
+- Either.Left/Right do not cache the optional returned for left()/right()
+ (getChunk type calls all have to go through them...)
+
+- ArraySetSorted does not override removeIf, so the default uses
+an iterator. removeIf is invoked heavily in ChunkMapDistance (on every
+tick). Replace with an impl that does not use an iterator
+
+- Some lighting stuff allocating MutableInt for passing a second
+return value from a function. use a field since the JIT is not stack
+allocating the variable
+
+- Randomly ticking a block would allocate a BlockPosition, replace
+with mutable pos
+
+- Entity iteration for ticking would use a non-fast iterator, thus
+creating lots of garbage entries.
+
+- Replace how the chunk map and light data is updated
+   Before the underlying maps were copy on write, however this obviously
+   will not scale well at all for large player counts. The replacement is
+   a system which will queue updates to a map locked by a seqlock.
+   Intentionally, the constructors/fields were clobbered, breaking
+   the ABI.
+
+   Also changes the chunk map used by ChunkProviderServer when ticking
+   chunks to reduce the amount of chunk holders that get skipped over
+
+- Vec3d allocation by tracker for checking a simple delta
+
+- Iterator usage in areas
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperCommand.java b/src/main/java/com/destroystokyo/paper/PaperCommand.java
+index 132397b3..dc05b930 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperCommand.java
++++ b/src/main/java/com/destroystokyo/paper/PaperCommand.java
+@@ -215,7 +215,7 @@ public class PaperCommand extends Command {
+             int ticking = 0;
+             int entityTicking = 0;
+ 
+-            for (PlayerChunk chunk : world.getChunkProvider().playerChunkMap.updatingChunks.values()) {
++            for (PlayerChunk chunk : world.getChunkProvider().playerChunkMap.chunkMap.getUpdatingValues()) { // Paper - replace chunk map
+                 if (chunk.getFullChunkIfCached() == null) {
+                     continue;
+                 }
+diff --git a/src/main/java/com/destroystokyo/paper/util/list/ExtendedAbstractDoubleList.java b/src/main/java/com/destroystokyo/paper/util/list/ExtendedAbstractDoubleList.java
+new file mode 100644
+index 00000000..39babc26
+--- /dev/null
++++ b/src/main/java/com/destroystokyo/paper/util/list/ExtendedAbstractDoubleList.java
+@@ -0,0 +1,43 @@
++package com.destroystokyo.paper.util.list;
++
++import it.unimi.dsi.fastutil.doubles.AbstractDoubleList;
++import it.unimi.dsi.fastutil.doubles.DoubleList;
++
++import java.util.List;
++
++/**
++ * @author Spottedleaf
++ */
++public abstract class ExtendedAbstractDoubleList extends AbstractDoubleList {
++
++    // reduce iterator allocation in equals
++    @Override
++    public boolean equals(final Object other) {
++        if (other == this) {
++            return true;
++        }
++        if (!(other instanceof DoubleList)) {
++            if (other instanceof List) {
++                return super.equals(other);
++            }
++            return false;
++        }
++
++        final DoubleList otherList = (DoubleList)other;
++
++        final int otherSize = otherList.size();
++        final int thisSize = this.size();
++
++        if (otherSize != thisSize) {
++            return false;
++        }
++
++        for (int i = 0; i < thisSize; ++i) {
++            if (this.getDouble(i) != otherList.getDouble(i)) {
++                return false;
++            }
++        }
++
++        return true;
++    }
++}
+diff --git a/src/main/java/com/destroystokyo/paper/util/list/ExtendedDoubleArrayList.java b/src/main/java/com/destroystokyo/paper/util/list/ExtendedDoubleArrayList.java
+new file mode 100644
+index 00000000..ea5179ba
+--- /dev/null
++++ b/src/main/java/com/destroystokyo/paper/util/list/ExtendedDoubleArrayList.java
+@@ -0,0 +1,65 @@
++package com.destroystokyo.paper.util.list;
++
++import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
++import it.unimi.dsi.fastutil.doubles.DoubleList;
++
++import java.util.Arrays;
++import java.util.List;
++
++public class ExtendedDoubleArrayList extends DoubleArrayList {
++
++    public ExtendedDoubleArrayList() {
++        super();
++    }
++
++    public ExtendedDoubleArrayList(final int capacity) {
++        super(capacity);
++    }
++
++    public ExtendedDoubleArrayList(final double[] array) {
++        this(array, array.length, true);
++    }
++
++    public ExtendedDoubleArrayList(final double[] array, final int size, final boolean copy) {
++        super(copy ? array.clone() : array, false);
++        this.size = size;
++    }
++
++    public static ExtendedDoubleArrayList getList(final double[] list, final int requiredLength) {
++        if (list.length == requiredLength) {
++            return new ExtendedDoubleArrayList(list, requiredLength, false);
++        } else {
++            return new ExtendedDoubleArrayList(Arrays.copyOf(list, requiredLength), requiredLength, false);
++        }
++    }
++
++    @Override
++    public boolean equals(final Object other) {
++        if (other == this) {
++            return true;
++        }
++        if (!(other instanceof DoubleList)) {
++            if (other instanceof List) {
++                return super.equals(other);
++            }
++            return false;
++        }
++
++        final DoubleList otherList = (DoubleList)other;
++
++        final int otherSize = otherList.size();
++        final int thisSize = this.size();
++
++        if (otherSize != thisSize) {
++            return false;
++        }
++
++        for (int i = 0; i < thisSize; ++i) {
++            if (this.getDouble(i) != otherList.getDouble(i)) {
++                return false;
++            }
++        }
++
++        return true;
++    }
++}
+diff --git a/src/main/java/com/mojang/datafixers/util/Either.java b/src/main/java/com/mojang/datafixers/util/Either.java
+index a90adac7..d15c3daa 100644
+--- a/src/main/java/com/mojang/datafixers/util/Either.java
++++ b/src/main/java/com/mojang/datafixers/util/Either.java
+@@ -23,9 +23,11 @@ public abstract class Either<L, R> implements App<Either.Mu<R>, L> {
+ 
+     private static final class Left<L, R> extends Either<L, R> {
+         private final L value;
++        private final Optional<L> cachedLeft; // Paper - reduce allocation of these for chunks
+ 
+         public Left(final L value) {
+             this.value = value;
++            this.cachedLeft = Optional.of(value); // Paper - reduce allocation of these for chunks
+         }
+ 
+         @Override
+@@ -51,7 +53,7 @@ public abstract class Either<L, R> implements App<Either.Mu<R>, L> {
+ 
+         @Override
+         public Optional<L> left() {
+-            return Optional.of(value);
++            return this.cachedLeft; // Paper - reduce allocation of these for chunks
+         }
+ 
+         @Override
+@@ -84,9 +86,11 @@ public abstract class Either<L, R> implements App<Either.Mu<R>, L> {
+ 
+     private static final class Right<L, R> extends Either<L, R> {
+         private final R value;
++        private final Optional<R> cachedRight; // Paper - reduce allocation of these for chunks
+ 
+         public Right(final R value) {
+             this.value = value;
++            this.cachedRight = Optional.of(value); // Paper - reduce allocation of these for chunks
+         }
+ 
+         @Override
+@@ -117,7 +121,7 @@ public abstract class Either<L, R> implements App<Either.Mu<R>, L> {
+ 
+         @Override
+         public Optional<R> right() {
+-            return Optional.of(value);
++            return this.cachedRight; // Paper - reduce allocation of these for chunks
+         }
+ 
+         @Override
+diff --git a/src/main/java/net/minecraft/server/BlockPosition.java b/src/main/java/net/minecraft/server/BlockPosition.java
+index e76528f1..e650a2e4 100644
+--- a/src/main/java/net/minecraft/server/BlockPosition.java
++++ b/src/main/java/net/minecraft/server/BlockPosition.java
+@@ -450,6 +450,7 @@ public class BlockPosition extends BaseBlockPosition implements MinecraftSeriali
+             return this.d(MathHelper.floor(d0), MathHelper.floor(d1), MathHelper.floor(d2));
+         }
+ 
++        public final BlockPosition.MutableBlockPosition setValues(final BaseBlockPosition baseblockposition) { return this.g(baseblockposition); } // Paper - OBFHELPER
+         public BlockPosition.MutableBlockPosition g(BaseBlockPosition baseblockposition) {
+             return this.d(baseblockposition.getX(), baseblockposition.getY(), baseblockposition.getZ());
+         }
+diff --git a/src/main/java/net/minecraft/server/ChunkMap.java b/src/main/java/net/minecraft/server/ChunkMap.java
+index 55f9f4e6..331951e2 100644
+--- a/src/main/java/net/minecraft/server/ChunkMap.java
++++ b/src/main/java/net/minecraft/server/ChunkMap.java
+@@ -13,9 +13,8 @@ public abstract class ChunkMap extends LightEngineGraph {
+ 
+     @Override
+     protected void a(long i, int j, boolean flag) {
+-        ChunkCoordIntPair chunkcoordintpair = new ChunkCoordIntPair(i);
+-        int k = chunkcoordintpair.x;
+-        int l = chunkcoordintpair.z;
++        int k = ChunkCoordIntPair.getX(i); // Paper - remove allocation of ChunkCoordIntPair
++        int l = ChunkCoordIntPair.getZ(i); // Paper - remove allocation of ChunkCoordIntPair
+ 
+         for (int i1 = -1; i1 <= 1; ++i1) {
+             for (int j1 = -1; j1 <= 1; ++j1) {
+@@ -32,9 +31,8 @@ public abstract class ChunkMap extends LightEngineGraph {
+     @Override
+     protected int a(long i, long j, int k) {
+         int l = k;
+-        ChunkCoordIntPair chunkcoordintpair = new ChunkCoordIntPair(i);
+-        int i1 = chunkcoordintpair.x;
+-        int j1 = chunkcoordintpair.z;
++        int i1 = ChunkCoordIntPair.getX(i); // Paper - remove allocation of ChunkCoordIntPair
++        int j1 = ChunkCoordIntPair.getZ(i); // Paper - remove allocation of ChunkCoordIntPair
+ 
+         for (int k1 = -1; k1 <= 1; ++k1) {
+             for (int l1 = -1; l1 <= 1; ++l1) {
+diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
+index b849f457..e82b46f0 100644
+--- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
++++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
+@@ -351,7 +351,7 @@ public abstract class ChunkMapDistance {
+         }
+ 
+         public void a(int i) {
+-            ObjectIterator objectiterator = this.a.long2ByteEntrySet().iterator();
++            ObjectIterator objectiterator = this.a.long2ByteEntrySet().fastIterator(); // Paper - use fast iterator to reduce entry creation
+ 
+             while (objectiterator.hasNext()) {
+                 it.unimi.dsi.fastutil.longs.Long2ByteMap.Entry it_unimi_dsi_fastutil_longs_long2bytemap_entry = (it.unimi.dsi.fastutil.longs.Long2ByteMap.Entry) objectiterator.next();
+@@ -432,7 +432,7 @@ public abstract class ChunkMapDistance {
+ 
+     class b extends ChunkMap {
+ 
+-        protected final Long2ByteMap a = new Long2ByteOpenHashMap();
++        protected final Long2ByteOpenHashMap  a = new Long2ByteOpenHashMap(); // Paper - Long2ByteMap -> Long2ByteOpenHashMap
+         protected final int b;
+ 
+         protected b(int i) {
+diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
+index 190f7188..d45ef7d4 100644
+--- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
++++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
+@@ -598,6 +598,12 @@ public class ChunkProviderServer extends IChunkProvider {
+         this.clearCache();
+     }
+ 
++    // Paper start
++    final com.destroystokyo.paper.util.maplist.ChunkList entityTickingChunks = new com.destroystokyo.paper.util.maplist.ChunkList();
++    boolean isTickingChunks = false;
++    final it.unimi.dsi.fastutil.objects.Object2BooleanLinkedOpenHashMap<Chunk> pendingEntityTickingChunkChanges = new it.unimi.dsi.fastutil.objects.Object2BooleanLinkedOpenHashMap<>(16, 0.8f);
++    // Paper end
++
+     private void tickChunks() {
+         long i = this.world.getTime();
+         long j = i - this.lastTickTime;
+@@ -636,12 +642,13 @@ public class ChunkProviderServer extends IChunkProvider {
+ 
+             this.world.timings.countNaturalMobs.stopTiming(); // Paper - timings
+             this.world.getMethodProfiler().exit();
+-            this.playerChunkMap.f().forEach((playerchunk) -> {
+-                Optional<Chunk> optional = ((Either) playerchunk.b().getNow(PlayerChunk.UNLOADED_CHUNK)).left();
+-
+-                if (optional.isPresent()) {
+-                    Chunk chunk = (Chunk) optional.get();
+-
++            // Paper start - replace usage of chunk map
++            // the replaced map will always be entity ticking chunks (with a few exceptions)
++            this.isTickingChunks = true;
++            for (Chunk chunk : this.entityTickingChunks) {
++                PlayerChunk playerchunk = chunk.playerChunk;
++                if (playerchunk != null && (playerchunk.isFullChunkReady() & playerchunk.isTickingReady() & playerchunk.isEntityTickingReady())) {
++                    // Paper end
+                     this.world.getMethodProfiler().enter("broadcast");
+                     this.world.timings.broadcastChunkUpdates.startTiming(); // Paper - timings
+                     playerchunk.a(chunk);
+@@ -727,7 +734,22 @@ public class ChunkProviderServer extends IChunkProvider {
+                         this.world.timings.chunkTicks.stopTiming(); // Spigot // Paper
+                     }
+                 }
+-            });
++            } // Paper start - replace usage of chunk map
++            this.isTickingChunks = false;
++            if (!this.pendingEntityTickingChunkChanges.isEmpty()) {
++                for (it.unimi.dsi.fastutil.objects.ObjectBidirectionalIterator<it.unimi.dsi.fastutil.objects.Object2BooleanMap.Entry<Chunk>> iterator = this.pendingEntityTickingChunkChanges.object2BooleanEntrySet().fastIterator(this.pendingEntityTickingChunkChanges.object2BooleanEntrySet().last()); iterator.hasPrevious(); ) {
++                    it.unimi.dsi.fastutil.objects.Object2BooleanMap.Entry<Chunk> entry = iterator.previous();
++
++                    if (entry.getBooleanValue()) {
++                        this.entityTickingChunks.add(entry.getKey());
++                    } else {
++                        this.entityTickingChunks.remove(entry.getKey());
++                    }
++
++                    iterator.remove();
++                }
++            }
++            // Paper end
+             this.world.getMethodProfiler().enter("customSpawners");
+             if (flag1) {
+                 try (co.aikar.timings.Timing ignored = this.world.timings.miscMobSpawning.startTiming()) { // Paper - timings
+diff --git a/src/main/java/net/minecraft/server/DoubleListOffset.java b/src/main/java/net/minecraft/server/DoubleListOffset.java
+index 73657f74..eae60204 100644
+--- a/src/main/java/net/minecraft/server/DoubleListOffset.java
++++ b/src/main/java/net/minecraft/server/DoubleListOffset.java
+@@ -3,7 +3,7 @@ package net.minecraft.server;
+ import it.unimi.dsi.fastutil.doubles.AbstractDoubleList;
+ import it.unimi.dsi.fastutil.doubles.DoubleList;
+ 
+-public class DoubleListOffset extends AbstractDoubleList {
++public class DoubleListOffset extends com.destroystokyo.paper.util.list.ExtendedAbstractDoubleList { // Paper - remove iterator allocation of equals() here
+ 
+     private final DoubleList a;
+     private final double b;
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index 865b4034..b29256b7 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -1742,8 +1742,13 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+     }
+ 
+     public void a(ChunkCoordIntPair chunkcoordintpair) {
++        // Paper start - remove ChunkCoordIntPair allocation
++        this.sendChunkUnload(chunkcoordintpair.x, chunkcoordintpair.z);
++    }
++    public final void sendChunkUnload(int x, int z) {
++        // Paper end
+         if (this.isAlive()) {
+-            this.playerConnection.sendPacket(new PacketPlayOutUnloadChunk(chunkcoordintpair.x, chunkcoordintpair.z));
++            this.playerConnection.sendPacket(new PacketPlayOutUnloadChunk(x, z)); // Paper
+         }
+ 
+     }
+diff --git a/src/main/java/net/minecraft/server/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
+index 3a88c9a6..a77bc65b 100644
+--- a/src/main/java/net/minecraft/server/EntityTrackerEntry.java
++++ b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
+@@ -124,8 +124,12 @@ public class EntityTrackerEntry {
+                 ++this.o;
+                 i = MathHelper.d(this.tracker.yaw * 256.0F / 360.0F);
+                 j = MathHelper.d(this.tracker.pitch * 256.0F / 360.0F);
+-                Vec3D vec3d = this.tracker.getPositionVector().d(PacketPlayOutEntity.a(this.xLoc, this.yLoc, this.zLoc));
+-                boolean flag1 = vec3d.g() >= 7.62939453125E-6D;
++                // Paper start - remove allocation of Vec3D here
++                double vec3d_dx = this.tracker.locX() - 2.44140625E-4D*(this.xLoc);
++                double vec3d_dy = this.tracker.locY() - 2.44140625E-4D*(this.yLoc);
++                double vec3d_dz = this.tracker.locZ() - 2.44140625E-4D*(this.zLoc);
++                boolean flag1 = (vec3d_dx * vec3d_dx + vec3d_dy * vec3d_dy + vec3d_dz * vec3d_dz) >= 7.62939453125E-6D;
++                // Paper end
+                 Packet<?> packet1 = null;
+                 boolean flag2 = flag1 || this.tickCounter % 60 == 0;
+                 boolean flag3 = Math.abs(i - this.yRot) >= 1 || Math.abs(j - this.xRot) >= 1;
+@@ -142,9 +146,11 @@ public class EntityTrackerEntry {
+                 // CraftBukkit end
+ 
+                 if (this.tickCounter > 0 || this.tracker instanceof EntityArrow) {
+-                    long k = PacketPlayOutEntity.a(vec3d.x);
+-                    long l = PacketPlayOutEntity.a(vec3d.y);
+-                    long i1 = PacketPlayOutEntity.a(vec3d.z);
++                    // Paper start - remove allocation of Vec3D here
++                    long k = PacketPlayOutEntity.a(vec3d_dx);
++                    long l = PacketPlayOutEntity.a(vec3d_dy);
++                    long i1 = PacketPlayOutEntity.a(vec3d_dz);
++                    // Paper end
+                     boolean flag4 = k < -32768L || k > 32767L || l < -32768L || l > 32767L || i1 < -32768L || i1 > 32767L;
+ 
+                     if (!flag4 && this.o <= 400 && !this.q && this.r == this.tracker.onGround) {
+diff --git a/src/main/java/net/minecraft/server/LightEngineBlock.java b/src/main/java/net/minecraft/server/LightEngineBlock.java
+index 93a97260..759b1cbe 100644
+--- a/src/main/java/net/minecraft/server/LightEngineBlock.java
++++ b/src/main/java/net/minecraft/server/LightEngineBlock.java
+@@ -37,7 +37,7 @@ public final class LightEngineBlock extends LightEngineLayer<LightEngineStorageB
+             if (enumdirection == null) {
+                 return 15;
+             } else {
+-                MutableInt mutableint = new MutableInt();
++                MutableInt mutableint = this.lastLevel; // Paper - remove allocation of MutableInt
+                 IBlockData iblockdata = this.a(j, mutableint);
+ 
+                 if (mutableint.getValue() >= 15) {
+diff --git a/src/main/java/net/minecraft/server/LightEngineLayer.java b/src/main/java/net/minecraft/server/LightEngineLayer.java
+index f72ff849..4e4bd137 100644
+--- a/src/main/java/net/minecraft/server/LightEngineLayer.java
++++ b/src/main/java/net/minecraft/server/LightEngineLayer.java
+@@ -11,7 +11,7 @@ public abstract class LightEngineLayer<M extends LightEngineStorageArray<M>, S e
+     protected final EnumSkyBlock b;
+     protected final S c;
+     private boolean f;
+-    protected final BlockPosition.MutableBlockPosition d = new BlockPosition.MutableBlockPosition();
++    protected final BlockPosition.MutableBlockPosition d = new BlockPosition.MutableBlockPosition(); protected final MutableInt lastLevel = new MutableInt(); // Paper - avoid allocating MutableInt
+     private final long[] g = new long[2];
+     private final IBlockAccess[] h = new IBlockAccess[2];
+ 
+diff --git a/src/main/java/net/minecraft/server/LightEngineSky.java b/src/main/java/net/minecraft/server/LightEngineSky.java
+index 2301a982..06520869 100644
+--- a/src/main/java/net/minecraft/server/LightEngineSky.java
++++ b/src/main/java/net/minecraft/server/LightEngineSky.java
+@@ -27,7 +27,7 @@ public final class LightEngineSky extends LightEngineLayer<LightEngineStorageSky
+             if (k >= 15) {
+                 return k;
+             } else {
+-                MutableInt mutableint = new MutableInt();
++                MutableInt mutableint = this.lastLevel; // Paper - remove allocation of MutableInt
+                 IBlockData iblockdata = this.a(j, mutableint);
+ 
+                 if (mutableint.getValue() >= 15) {
+diff --git a/src/main/java/net/minecraft/server/LightEngineStorage.java b/src/main/java/net/minecraft/server/LightEngineStorage.java
+index a3f91981..03fd7e00 100644
+--- a/src/main/java/net/minecraft/server/LightEngineStorage.java
++++ b/src/main/java/net/minecraft/server/LightEngineStorage.java
+@@ -19,8 +19,8 @@ public abstract class LightEngineStorage<M extends LightEngineStorageArray<M>> e
+     protected final LongSet b = new LongOpenHashSet();
+     protected final LongSet c = new LongOpenHashSet();
+     protected final LongSet d = new LongOpenHashSet();
+-    protected volatile M e;
+-    protected final M f;
++    protected volatile M e; // Paper - diff on change, should be "visible" (like chunk map)
++    protected final M f; // Paper - diff on change, should be "updating" (like chunk map)
+     protected final LongSet g = new LongOpenHashSet();
+     protected final LongSet h = new LongOpenHashSet();
+     protected final Long2ObjectMap<NibbleArray> i = Long2ObjectMaps.synchronize(new Long2ObjectOpenHashMap());
+diff --git a/src/main/java/net/minecraft/server/LightEngineStorageArray.java b/src/main/java/net/minecraft/server/LightEngineStorageArray.java
+index b978723a..726738ee 100644
+--- a/src/main/java/net/minecraft/server/LightEngineStorageArray.java
++++ b/src/main/java/net/minecraft/server/LightEngineStorageArray.java
+@@ -8,10 +8,17 @@ public abstract class LightEngineStorageArray<M extends LightEngineStorageArray<
+     private final long[] b = new long[2];
+     private final NibbleArray[] c = new NibbleArray[2];
+     private boolean d;
+-    protected final Long2ObjectOpenHashMap<NibbleArray> a;
++    protected final com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<NibbleArray> data; // Paper - avoid copying light data
++    protected final boolean isVisible; // Paper - avoid copying light data
+ 
+-    protected LightEngineStorageArray(Long2ObjectOpenHashMap<NibbleArray> long2objectopenhashmap) {
+-        this.a = long2objectopenhashmap;
++    // Paper start - avoid copying light data
++    protected LightEngineStorageArray(com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<NibbleArray> data, boolean isVisible) {
++        if (isVisible) {
++            data.performUpdatesLockMap();
++        }
++        this.data = data;
++        this.isVisible = isVisible;
++        // Paper end
+         this.c();
+         this.d = true;
+     }
+@@ -19,12 +26,13 @@ public abstract class LightEngineStorageArray<M extends LightEngineStorageArray<
+     public abstract M b();
+ 
+     public void a(long i) {
+-        this.a.put(i, ((NibbleArray) this.a.get(i)).b());
++        if (this.isVisible) { throw new IllegalStateException("writing to visible data"); } // Paper - avoid copying light data
++        this.data.queueUpdate(i, ((NibbleArray) this.data.getUpdating(i)).copy()); // Paper - avoid copying light data
+         this.c();
+     }
+ 
+     public boolean b(long i) {
+-        return this.a.containsKey(i);
++        return this.isVisible ? this.data.getVisibleAsync(i) != null : this.data.getUpdating(i) != null; // Paper - avoid copying light data
+     }
+ 
+     @Nullable
+@@ -37,7 +45,7 @@ public abstract class LightEngineStorageArray<M extends LightEngineStorageArray<
+             }
+         }
+ 
+-        NibbleArray nibblearray = (NibbleArray) this.a.get(i);
++        NibbleArray nibblearray = (NibbleArray) (this.isVisible ? this.data.getVisibleAsync(i) : this.data.getUpdating(i)); // Paper - avoid copying light data
+ 
+         if (nibblearray == null) {
+             return null;
+@@ -58,11 +66,13 @@ public abstract class LightEngineStorageArray<M extends LightEngineStorageArray<
+ 
+     @Nullable
+     public NibbleArray d(long i) {
+-        return (NibbleArray) this.a.remove(i);
++        if (this.isVisible) { throw new IllegalStateException("writing to visible data"); } // Paper - avoid copying light data
++        return (NibbleArray) this.data.queueRemove(i); // Paper - avoid copying light data
+     }
+ 
+     public void a(long i, NibbleArray nibblearray) {
+-        this.a.put(i, nibblearray);
++        if (this.isVisible) { throw new IllegalStateException("writing to visible data"); } // Paper - avoid copying light data
++        this.data.queueUpdate(i, nibblearray); // Paper - avoid copying light data
+     }
+ 
+     public void c() {
+diff --git a/src/main/java/net/minecraft/server/LightEngineStorageBlock.java b/src/main/java/net/minecraft/server/LightEngineStorageBlock.java
+index 0f7f4744..bb91b5f6 100644
+--- a/src/main/java/net/minecraft/server/LightEngineStorageBlock.java
++++ b/src/main/java/net/minecraft/server/LightEngineStorageBlock.java
+@@ -5,7 +5,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+ public class LightEngineStorageBlock extends LightEngineStorage<LightEngineStorageBlock.a> {
+ 
+     protected LightEngineStorageBlock(ILightAccess ilightaccess) {
+-        super(EnumSkyBlock.BLOCK, ilightaccess, new LightEngineStorageBlock.a(new Long2ObjectOpenHashMap()));
++        super(EnumSkyBlock.BLOCK, ilightaccess, new LightEngineStorageBlock.a(new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<>(), false)); // Paper - avoid copying light data
+     }
+ 
+     @Override
+@@ -18,13 +18,13 @@ public class LightEngineStorageBlock extends LightEngineStorage<LightEngineStora
+ 
+     public static final class a extends LightEngineStorageArray<LightEngineStorageBlock.a> {
+ 
+-        public a(Long2ObjectOpenHashMap<NibbleArray> long2objectopenhashmap) {
+-            super(long2objectopenhashmap);
++        public a(com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<NibbleArray> long2objectopenhashmap, boolean isVisible) { // Paper - avoid copying light data
++            super(long2objectopenhashmap, isVisible); // Paper - avoid copying light data
+         }
+ 
+         @Override
+         public LightEngineStorageBlock.a b() {
+-            return new LightEngineStorageBlock.a(this.a.clone());
++            return new LightEngineStorageBlock.a(this.data, true); // Paper - avoid copying light data
+         }
+     }
+ }
+diff --git a/src/main/java/net/minecraft/server/LightEngineStorageSky.java b/src/main/java/net/minecraft/server/LightEngineStorageSky.java
+index 75d9065b..06e15b5d 100644
+--- a/src/main/java/net/minecraft/server/LightEngineStorageSky.java
++++ b/src/main/java/net/minecraft/server/LightEngineStorageSky.java
+@@ -17,7 +17,7 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+     private volatile boolean p;
+ 
+     protected LightEngineStorageSky(ILightAccess ilightaccess) {
+-        super(EnumSkyBlock.SKY, ilightaccess, new LightEngineStorageSky.a(new Long2ObjectOpenHashMap(), new Long2IntOpenHashMap(), Integer.MAX_VALUE));
++        super(EnumSkyBlock.SKY, ilightaccess, new LightEngineStorageSky.a(new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<>(), new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Int(), Integer.MAX_VALUE)); // Paper - avoid copying light data
+     }
+ 
+     @Override
+@@ -25,7 +25,7 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+         long j = SectionPosition.e(i);
+         int k = SectionPosition.c(j);
+         LightEngineStorageSky.a lightenginestoragesky_a = (LightEngineStorageSky.a) this.e;
+-        int l = lightenginestoragesky_a.c.get(SectionPosition.f(j));
++        int l = lightenginestoragesky_a.otherData.getVisibleAsync(SectionPosition.f(j)); // Paper - avoid copying light data
+ 
+         if (l != lightenginestoragesky_a.b && k < l) {
+             NibbleArray nibblearray = this.a(lightenginestoragesky_a, j); // Paper - decompile fix
+@@ -54,14 +54,14 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+ 
+         if (((LightEngineStorageSky.a) this.f).b > j) {
+             ((LightEngineStorageSky.a) this.f).b = j;
+-            ((LightEngineStorageSky.a) this.f).c.defaultReturnValue(((LightEngineStorageSky.a) this.f).b);
++            ((LightEngineStorageSky.a) this.f).otherData.queueDefaultReturnValue(((LightEngineStorageSky.a) this.f).b); // Paper - avoid copying light data
+         }
+ 
+         long k = SectionPosition.f(i);
+-        int l = ((LightEngineStorageSky.a) this.f).c.get(k);
++        int l = ((LightEngineStorageSky.a) this.f).otherData.getUpdating(k); // Paper - avoid copying light data
+ 
+         if (l < j + 1) {
+-            ((LightEngineStorageSky.a) this.f).c.put(k, j + 1);
++            ((LightEngineStorageSky.a) this.f).otherData.queueUpdate(k, j + 1); // Paper - avoid copying light data
+             if (this.o.contains(k)) {
+                 this.q(i);
+                 if (l > ((LightEngineStorageSky.a) this.f).b) {
+@@ -101,7 +101,7 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+ 
+         int k = SectionPosition.c(i);
+ 
+-        if (((LightEngineStorageSky.a) this.f).c.get(j) == k + 1) {
++        if (((LightEngineStorageSky.a) this.f).otherData.getUpdating(j) == k + 1) { // Paper - avoid copying light data
+             long l;
+ 
+             for (l = i; !this.g(l) && this.a(k); l = SectionPosition.a(l, EnumDirection.DOWN)) {
+@@ -109,12 +109,12 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+             }
+ 
+             if (this.g(l)) {
+-                ((LightEngineStorageSky.a) this.f).c.put(j, k + 1);
++                ((LightEngineStorageSky.a) this.f).otherData.queueUpdate(j, k + 1); // Paper - avoid copying light data
+                 if (flag) {
+                     this.q(l);
+                 }
+             } else {
+-                ((LightEngineStorageSky.a) this.f).c.remove(j);
++                ((LightEngineStorageSky.a) this.f).otherData.queueRemove(j); // Paper - avoid copying light data
+             }
+         }
+ 
+@@ -128,7 +128,7 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+     protected void b(long i, boolean flag) {
+         this.d();
+         if (flag && this.o.add(i)) {
+-            int j = ((LightEngineStorageSky.a) this.f).c.get(i);
++            int j = ((LightEngineStorageSky.a) this.f).otherData.getUpdating(i); // Paper - avoid copying light data
+ 
+             if (j != ((LightEngineStorageSky.a) this.f).b) {
+                 long k = SectionPosition.b(SectionPosition.b(i), j - 1, SectionPosition.d(i));
+@@ -155,7 +155,7 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+             return nibblearray;
+         } else {
+             long j = SectionPosition.a(i, EnumDirection.UP);
+-            int k = ((LightEngineStorageSky.a) this.f).c.get(SectionPosition.f(i));
++            int k = ((LightEngineStorageSky.a) this.f).otherData.getUpdating(SectionPosition.f(i)); // Paper - avoid copying light data
+ 
+             if (k != ((LightEngineStorageSky.a) this.f).b && SectionPosition.c(j) < k) {
+                 NibbleArray nibblearray1;
+@@ -298,7 +298,7 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+             if (!this.o.contains(l)) {
+                 return false;
+             } else {
+-                int i1 = ((LightEngineStorageSky.a) this.f).c.get(l);
++                int i1 = ((LightEngineStorageSky.a) this.f).otherData.getUpdating(l); // Paper - avoid copying light data
+ 
+                 return SectionPosition.c(i1) == j + 16;
+             }
+@@ -307,7 +307,7 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+ 
+     protected boolean n(long i) {
+         long j = SectionPosition.f(i);
+-        int k = ((LightEngineStorageSky.a) this.f).c.get(j);
++        int k = ((LightEngineStorageSky.a) this.f).otherData.getUpdating(j); // Paper - avoid copying light data
+ 
+         return k == ((LightEngineStorageSky.a) this.f).b || SectionPosition.c(i) >= k;
+     }
+@@ -321,18 +321,20 @@ public class LightEngineStorageSky extends LightEngineStorage<LightEngineStorage
+     public static final class a extends LightEngineStorageArray<LightEngineStorageSky.a> {
+ 
+         private int b;
+-        private final Long2IntOpenHashMap c;
++        private final com.destroystokyo.paper.util.map.QueuedChangesMapLong2Int otherData; // Paper - avoid copying light data
+ 
+-        public a(Long2ObjectOpenHashMap<NibbleArray> long2objectopenhashmap, Long2IntOpenHashMap long2intopenhashmap, int i) {
+-            super(long2objectopenhashmap);
+-            this.c = long2intopenhashmap;
+-            long2intopenhashmap.defaultReturnValue(i);
++        // Paper start - avoid copying light data
++        public a(com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<NibbleArray> data, com.destroystokyo.paper.util.map.QueuedChangesMapLong2Int otherData, int i) {
++            super(data, false);
++            this.otherData = otherData;
++            // Paper end
+             this.b = i;
+         }
+ 
+         @Override
+         public LightEngineStorageSky.a b() {
+-            return new LightEngineStorageSky.a(this.a.clone(), this.c.clone(), this.b);
++            this.otherData.performUpdatesLockMap(); // Paper - avoid copying light data
++            return new LightEngineStorageSky.a(this.data, this.otherData, this.b); // Paper - avoid copying light data
+         }
+     }
+ }
+diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
+index c02c53b5..7ac56211 100644
+--- a/src/main/java/net/minecraft/server/MCUtil.java
++++ b/src/main/java/net/minecraft/server/MCUtil.java
+@@ -432,9 +432,9 @@ public final class MCUtil {
+ 
+             WorldServer world = ((org.bukkit.craftbukkit.CraftWorld)bukkitWorld).getHandle();
+             PlayerChunkMap chunkMap = world.getChunkProvider().playerChunkMap;
+-            Long2ObjectLinkedOpenHashMap<PlayerChunk> visibleChunks = chunkMap.visibleChunks;
++            // Paper - replace chunk map
+             ChunkMapDistance chunkMapDistance = chunkMap.getChunkMapDistanceManager();
+-            List<PlayerChunk> allChunks = new ArrayList<>(visibleChunks.values());
++            List<PlayerChunk> allChunks = chunkMap.chunkMap.getUpdatingValuesCopy(); // Paper - replace chunk map
+             List<EntityPlayer> players = world.players;
+ 
+             int fullLoadedChunks = 0;
+@@ -457,7 +457,7 @@ public final class MCUtil {
+             worldData.addProperty("view-distance", world.spigotConfig.viewDistance);
+             worldData.addProperty("keep-spawn-loaded", world.keepSpawnInMemory);
+             worldData.addProperty("keep-spawn-loaded-range", world.paperConfig.keepLoadedRange);
+-            worldData.addProperty("visible-chunk-count", visibleChunks.size());
++            worldData.addProperty("visible-chunk-count", allChunks.size()); // Paper - replace chunk map
+             worldData.addProperty("loaded-chunk-count", chunkMap.loadedChunks.size());
+             worldData.addProperty("verified-fully-loaded-chunks", fullLoadedChunks);
+ 
+diff --git a/src/main/java/net/minecraft/server/NBTTagCompound.java b/src/main/java/net/minecraft/server/NBTTagCompound.java
+index 98deaba1..515a0a7d 100644
+--- a/src/main/java/net/minecraft/server/NBTTagCompound.java
++++ b/src/main/java/net/minecraft/server/NBTTagCompound.java
+@@ -67,7 +67,7 @@ public class NBTTagCompound implements NBTBase {
+     }
+ 
+     public NBTTagCompound() {
+-        this(Maps.newHashMap());
++        this(new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(16, 0.7f)); // Paper - reduce memory footprint of NBTTagCompound
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/server/PairedQueue.java b/src/main/java/net/minecraft/server/PairedQueue.java
+index 85bb22e4..af4c9b6d 100644
+--- a/src/main/java/net/minecraft/server/PairedQueue.java
++++ b/src/main/java/net/minecraft/server/PairedQueue.java
+@@ -20,7 +20,7 @@ public interface PairedQueue<T, F> {
+ 
+     public static final class a implements PairedQueue<PairedQueue.b, Runnable> {
+ 
+-        private final List<Queue<Runnable>> a;
++        private final List<Queue<Runnable>> a; private final List<Queue<Runnable>> getQueues() { return this.a; } // Paper - OBFHELPER
+ 
+         public a(int i) {
+             this.a = (List) IntStream.range(0, i).mapToObj((j) -> {
+@@ -31,21 +31,16 @@ public interface PairedQueue<T, F> {
+         @Nullable
+         @Override
+         public Runnable a() {
+-            Iterator iterator = this.a.iterator();
+-
+-            Runnable runnable;
+-
+-            do {
+-                if (!iterator.hasNext()) {
+-                    return null;
++            // Paper start - reduce iteror creation
++            for (int i = 0, len = this.getQueues().size(); i < len; ++i) {
++                Queue<Runnable> queue = this.getQueues().get(i);
++                Runnable ret = queue.poll();
++                if (ret != null) {
++                    return ret;
+                 }
+-
+-                Queue<Runnable> queue = (Queue) iterator.next();
+-
+-                runnable = (Runnable) queue.poll();
+-            } while (runnable == null);
+-
+-            return runnable;
++            }
++            return null;
++            // Paper end
+         }
+ 
+         public boolean a(PairedQueue.b pairedqueue_b) {
+@@ -57,7 +52,15 @@ public interface PairedQueue<T, F> {
+ 
+         @Override
+         public boolean b() {
+-            return this.a.stream().allMatch(Collection::isEmpty);
++            // Paper start - reduce streams
++            for (int i = 0, len = this.getQueues().size(); i < len; ++i) {
++                Queue<Runnable> queue = this.getQueues().get(i);
++                if (!queue.isEmpty()) {
++                    return false;
++                }
++            }
++            return true;
++            // Paper end
+         }
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoal.java b/src/main/java/net/minecraft/server/PathfinderGoal.java
+index f22f12ee..8a92c461 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoal.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoal.java
+@@ -1,10 +1,12 @@
+ package net.minecraft.server;
+ 
++import com.destroystokyo.paper.util.set.OptimizedSmallEnumSet; // Paper
+ import java.util.EnumSet;
+ 
+ public abstract class PathfinderGoal {
+ 
+     private final EnumSet<PathfinderGoal.Type> a = EnumSet.noneOf(PathfinderGoal.Type.class);
++    private final OptimizedSmallEnumSet<Type> goalTypes = new OptimizedSmallEnumSet<>(PathfinderGoal.Type.class); // Paper - reduce garbage on heap
+ 
+     public PathfinderGoal() {}
+ 
+@@ -27,6 +29,10 @@ public abstract class PathfinderGoal {
+     public void a(EnumSet<PathfinderGoal.Type> enumset) {
+         this.a.clear();
+         this.a.addAll(enumset);
++        // Paper start - reduce garbage on heap
++        this.goalTypes.clear();
++        this.goalTypes.addAllUnchecked(enumset);
++        // Paper end
+     }
+ 
+     public String toString() {
+@@ -37,6 +43,13 @@ public abstract class PathfinderGoal {
+         return this.a;
+     }
+ 
++    // Paper start - reduce garbage on heap
++    public OptimizedSmallEnumSet<PathfinderGoal.Type> getGoalTypes() {
++        // needed for override in subclass
++        return this.goalTypes;
++    }
++    // Paper end
++
+     public static enum Type {
+ 
+         MOVE, LOOK, JUMP, TARGET;
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalSelector.java b/src/main/java/net/minecraft/server/PathfinderGoalSelector.java
+index 44bb18c5..97a203a2 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalSelector.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalSelector.java
+@@ -1,8 +1,10 @@
+ package net.minecraft.server;
+ 
+ import com.google.common.collect.Sets;
++import com.destroystokyo.paper.util.set.OptimizedSmallEnumSet; // Paper
+ import java.util.EnumMap;
+ import java.util.EnumSet;
++import java.util.Iterator; // Paper
+ import java.util.Map;
+ import java.util.Set;
+ import java.util.stream.Stream;
+@@ -26,7 +28,7 @@ public class PathfinderGoalSelector {
+     private final Map<PathfinderGoal.Type, PathfinderGoalWrapped> c = new EnumMap(PathfinderGoal.Type.class);
+     private final Set<PathfinderGoalWrapped> d = Sets.newLinkedHashSet();
+     private final GameProfilerFiller e;
+-    private final EnumSet<PathfinderGoal.Type> f = EnumSet.noneOf(PathfinderGoal.Type.class);
++    private final OptimizedSmallEnumSet<PathfinderGoal.Type> goalTypes = new OptimizedSmallEnumSet<>(PathfinderGoal.Type.class); // Paper - reduce garbage on heap
+     private int g = 3;
+ 
+     public PathfinderGoalSelector(GameProfilerFiller gameprofilerfiller) {
+@@ -38,33 +40,38 @@ public class PathfinderGoalSelector {
+     }
+ 
+     public void a(PathfinderGoal pathfindergoal) {
+-        this.d.stream().filter((pathfindergoalwrapped) -> {
+-            return pathfindergoalwrapped.j() == pathfindergoal;
+-        }).filter(PathfinderGoalWrapped::g).forEach(PathfinderGoalWrapped::d);
+-        this.d.removeIf((pathfindergoalwrapped) -> {
+-            return pathfindergoalwrapped.j() == pathfindergoal;
+-        });
++        // Paper start - remove streams
++        for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
++            PathfinderGoalWrapped goalWrapped = iterator.next();
++            if (goalWrapped.j() != pathfindergoal) {
++                continue;
++            }
++            if (goalWrapped.g()) {
++                goalWrapped.d();
++            }
++            iterator.remove();
++        }
++        // Paper end
+     }
+ 
++    private static final PathfinderGoal.Type[] PATHFINDER_GOAL_TYPES = PathfinderGoal.Type.values(); // Paper - cache this
++
+     public void doTick() {
+         this.e.enter("goalCleanup");
+-        this.c().filter((pathfindergoalwrapped) -> {
+-            boolean flag;
+-
+-            if (pathfindergoalwrapped.g()) {
+-                Stream stream = pathfindergoalwrapped.i().stream();
+-                EnumSet enumset = this.f;
++        // Paper start - remove streams
++        for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
++            PathfinderGoalWrapped wrappedGoal = iterator.next();
++            if (!wrappedGoal.g()) {
++                continue;
++            }
+ 
+-                this.f.getClass();
+-                if (!stream.anyMatch(enumset::contains) && pathfindergoalwrapped.b()) {
+-                    flag = false;
+-                    return flag;
+-                }
++            if (!this.goalTypes.hasCommonElements(wrappedGoal.getGoalTypes()) && wrappedGoal.b()) {
++                continue;
+             }
+ 
+-            flag = true;
+-            return flag;
+-        }).forEach(PathfinderGoal::d);
++            wrappedGoal.d();
++        }
++        // Paper end
+         this.c.forEach((pathfindergoal_type, pathfindergoalwrapped) -> {
+             if (!pathfindergoalwrapped.g()) {
+                 this.c.remove(pathfindergoal_type);
+@@ -73,43 +80,71 @@ public class PathfinderGoalSelector {
+         });
+         this.e.exit();
+         this.e.enter("goalUpdate");
+-        this.d.stream().filter((pathfindergoalwrapped) -> {
+-            return !pathfindergoalwrapped.g();
+-        }).filter((pathfindergoalwrapped) -> {
+-            Stream stream = pathfindergoalwrapped.i().stream();
+-            EnumSet enumset = this.f;
+-
+-            this.f.getClass();
+-            return stream.noneMatch(enumset::contains);
+-        }).filter((pathfindergoalwrapped) -> {
+-            return pathfindergoalwrapped.i().stream().allMatch((pathfindergoal_type) -> {
+-                return ((PathfinderGoalWrapped) this.c.getOrDefault(pathfindergoal_type, PathfinderGoalSelector.b)).a(pathfindergoalwrapped);
+-            });
+-        }).filter(PathfinderGoalWrapped::a).forEach((pathfindergoalwrapped) -> {
+-            pathfindergoalwrapped.i().forEach((pathfindergoal_type) -> {
+-                PathfinderGoalWrapped pathfindergoalwrapped1 = (PathfinderGoalWrapped) this.c.getOrDefault(pathfindergoal_type, PathfinderGoalSelector.b);
+-
+-                pathfindergoalwrapped1.d();
+-                this.c.put(pathfindergoal_type, pathfindergoalwrapped);
+-            });
+-            pathfindergoalwrapped.c();
+-        });
++        // Paper start - remove streams
++        goal_update_loop: for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
++            PathfinderGoalWrapped wrappedGoal = iterator.next();
++            if (wrappedGoal.g()) {
++                continue;
++            }
++
++            OptimizedSmallEnumSet<PathfinderGoal.Type> wrappedGoalSet = wrappedGoal.getGoalTypes();
++
++            if (this.goalTypes.hasCommonElements(wrappedGoalSet)) {
++                continue;
++            }
++
++            int wrappedGoalSetSize = wrappedGoalSet.size();
++
++            long iterator1 = wrappedGoalSet.getBackingSet();
++            for (int i = 0; i < wrappedGoalSetSize; ++i) { // better branch prediction if we check size, rather than if iterator1 != 0
++                PathfinderGoal.Type type = PATHFINDER_GOAL_TYPES[Long.numberOfTrailingZeros(iterator1)];
++                iterator1 ^= (-iterator1 & iterator1); // get trailing bit, https://github.com/Spottedleaf/ConcurrentUtil/blob/master/src/main/java/ca/spottedleaf/concurrentutil/util/IntegerUtil.java#L76
++                PathfinderGoalWrapped wrapped = this.c.getOrDefault(type, PathfinderGoalSelector.b);
++                if (!wrapped.a(wrappedGoal)) {
++                    continue goal_update_loop;
++                }
++            }
++
++            if (!wrappedGoal.a()) {
++                continue;
++            }
++
++            iterator1 = wrappedGoalSet.getBackingSet();
++            for (int i = 0; i < wrappedGoalSetSize; ++i) { // better branch prediction if we check size, rather than if iterator1 != 0
++                PathfinderGoal.Type type = PATHFINDER_GOAL_TYPES[Long.numberOfTrailingZeros(iterator1)];
++                iterator1 ^= (-iterator1 & iterator1); // get trailing bit, https://github.com/Spottedleaf/ConcurrentUtil/blob/master/src/main/java/ca/spottedleaf/concurrentutil/util/IntegerUtil.java#L76
++                PathfinderGoalWrapped wrapped = this.c.getOrDefault(type, PathfinderGoalSelector.b);
++
++                wrapped.d();
++                this.c.put(type, wrappedGoal);
++            }
++
++            wrappedGoal.c();
++        }
++        // Paper end
+         this.e.exit();
+         this.e.enter("goalTick");
+-        this.c().forEach(PathfinderGoalWrapped::e);
++        // Paper start - remove streams
++        for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
++            PathfinderGoalWrapped wrappedGoal = iterator.next();
++            if (wrappedGoal.g()) {
++                wrappedGoal.e();
++            }
++        }
++        // Paper end
+         this.e.exit();
+     }
+ 
+     public Stream<PathfinderGoalWrapped> c() {
+-        return this.d.stream().filter(PathfinderGoalWrapped::g);
++        return this.d.stream().filter(PathfinderGoalWrapped::g); // Paper - diff on change, see usages of this that were inlined
+     }
+ 
+     public void a(PathfinderGoal.Type pathfindergoal_type) {
+-        this.f.add(pathfindergoal_type);
++        this.goalTypes.addUnchecked(pathfindergoal_type); // Paper - remove streams
+     }
+ 
+     public void b(PathfinderGoal.Type pathfindergoal_type) {
+-        this.f.remove(pathfindergoal_type);
++        this.goalTypes.removeUnchecked(pathfindergoal_type); // Paper - remove streams
+     }
+ 
+     public void a(PathfinderGoal.Type pathfindergoal_type, boolean flag) {
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java b/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java
+index 5a8c60ad..12b00677 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java
+@@ -5,7 +5,7 @@ import javax.annotation.Nullable;
+ 
+ public class PathfinderGoalWrapped extends PathfinderGoal {
+ 
+-    private final PathfinderGoal a;
++    private final PathfinderGoal a; private final PathfinderGoal getWrapped() { return this.a; } // Paper - OBFHELPER
+     private final int b;
+     private boolean c;
+ 
+@@ -64,6 +64,13 @@ public class PathfinderGoalWrapped extends PathfinderGoal {
+         return this.a.i();
+     }
+ 
++    // Paper start
++    @Override
++    public com.destroystokyo.paper.util.set.OptimizedSmallEnumSet<PathfinderGoal.Type> getGoalTypes() {
++        return this.getWrapped().getGoalTypes();
++    }
++    // Paper end
++
+     public boolean g() {
+         return this.c;
+     }
+diff --git a/src/main/java/net/minecraft/server/PathfinderNormal.java b/src/main/java/net/minecraft/server/PathfinderNormal.java
+index 4240ca81..36ca445a 100644
+--- a/src/main/java/net/minecraft/server/PathfinderNormal.java
++++ b/src/main/java/net/minecraft/server/PathfinderNormal.java
+@@ -443,8 +443,10 @@ public class PathfinderNormal extends PathfinderAbstract {
+         return pathtype;
+     }
+ 
++    private static final BlockPosition.MutableBlockPosition PATH_TYPE_BLOCKPOSITION = new BlockPosition.MutableBlockPosition(); // Paper - reduce blockpos allocation
++
+     protected static PathType c(IBlockAccess iblockaccess, int i, int j, int k) {
+-        BlockPosition blockposition = new BlockPosition(i, j, k);
++        BlockPosition blockposition = PATH_TYPE_BLOCKPOSITION.setValues(i, j, k); // Paper - reduce blockpos allocation
+         IBlockData iblockdata = iblockaccess.getTypeIfLoaded(blockposition); // Paper
+         if (iblockdata == null) return PathType.BLOCKED; // Paper
+         Block block = iblockdata.getBlock();
+diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
+index 519ec02a..39e0717f 100644
+--- a/src/main/java/net/minecraft/server/PlayerChunk.java
++++ b/src/main/java/net/minecraft/server/PlayerChunk.java
+@@ -469,7 +469,15 @@ public class PlayerChunk {
+                     // note: Here is a very good place to add callbacks to logic waiting on this.
+                     PlayerChunk.this.isEntityTickingReady = true;
+ 
+-
++                    // Paper start - reduce garbage on heap
++                    ChunkProviderServer chunkProvder = PlayerChunk.this.chunkMap.world.getChunkProvider();
++                    Chunk chunk = either.left().get();
++                    if (chunkProvder.isTickingChunks) {
++                        chunkProvder.pendingEntityTickingChunkChanges.put(chunk, true);
++                    } else {
++                        chunkProvder.entityTickingChunks.add(chunk);
++                    }
++                    // Paper end
+ 
+ 
+                 }
+@@ -482,6 +490,17 @@ public class PlayerChunk {
+         if (flag6 && !flag7) {
+             this.entityTickingFuture.complete(PlayerChunk.UNLOADED_CHUNK);
+             this.isEntityTickingReady = false; // Paper - cache chunk ticking stage
++            // Paper start - reduce garbage on heap
++            ChunkProviderServer chunkProvder = PlayerChunk.this.chunkMap.world.getChunkProvider();
++            Chunk chunk = this.getFullChunkIfCached();
++            if (chunk != null) {
++                if (chunkProvder.isTickingChunks) {
++                    chunkProvder.pendingEntityTickingChunkChanges.put(chunk, false);
++                } else {
++                    chunkProvder.entityTickingChunks.remove(chunk);
++                }
++            }
++            // Paper end
+             this.entityTickingFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
+         }
+ 
+diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
+index 1da0e1da..222cbe0a 100644
+--- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
++++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
+@@ -55,8 +55,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+ 
+     private static final Logger LOGGER = LogManager.getLogger();
+     public static final int GOLDEN_TICKET = 33 + ChunkStatus.b();
+-    public final Long2ObjectLinkedOpenHashMap<PlayerChunk> updatingChunks = new Long2ObjectLinkedOpenHashMap();
+-    public volatile Long2ObjectLinkedOpenHashMap<PlayerChunk> visibleChunks;
++    //public final Long2ObjectLinkedOpenHashMap<PlayerChunk> updatingChunks = new Long2ObjectLinkedOpenHashMap(); // Paper - replace chunk map
++    //public volatile Long2ObjectLinkedOpenHashMap<PlayerChunk> visibleChunks; // Paper - replace chunk map
++    public final com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<PlayerChunk> chunkMap = new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<>(8192, 0.5f); // Paper - replace chunk map
+     private final Long2ObjectLinkedOpenHashMap<PlayerChunk> pendingUnload;
+     final LongSet loadedChunks; // Paper - private -> package
+     public final WorldServer world;
+@@ -136,7 +137,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+ 
+     public PlayerChunkMap(WorldServer worldserver, File file, DataFixer datafixer, DefinedStructureManager definedstructuremanager, Executor executor, IAsyncTaskHandler<Runnable> iasynctaskhandler, ILightAccess ilightaccess, ChunkGenerator<?> chunkgenerator, WorldLoadListener worldloadlistener, Supplier<WorldPersistentData> supplier, int i) {
+         super(new File(worldserver.getWorldProvider().getDimensionManager().a(file), "region"), datafixer);
+-        this.visibleChunks = this.updatingChunks.clone();
++        //this.visibleChunks = this.updatingChunks.clone(); // Paper - replace chunk map
+         this.pendingUnload = new Long2ObjectLinkedOpenHashMap();
+         this.loadedChunks = new LongOpenHashSet();
+         this.unloadQueue = new LongOpenHashSet();
+@@ -212,8 +213,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+     }
+ 
+     private static int a(ChunkCoordIntPair chunkcoordintpair, int i, int j) {
+-        int k = chunkcoordintpair.x - i;
+-        int l = chunkcoordintpair.z - j;
++        // Paper - remove allocation of ChunkCoordIntPair
++        return getSquareRadiusDistance(chunkcoordintpair.x, chunkcoordintpair.z, i, j);
++    }
++    private static int getSquareRadiusDistance(int chunkX0, int chunkZ0, int i, int j) {
++        int k = chunkX0 - i;
++        int l = chunkZ0 - j;
++        // Paper end
+ 
+         return Math.max(Math.abs(k), Math.abs(l));
+     }
+@@ -224,12 +230,17 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+ 
+     @Nullable
+     protected PlayerChunk getUpdatingChunk(long i) {
+-        return (PlayerChunk) this.updatingChunks.get(i);
++        return (PlayerChunk) this.chunkMap.getUpdating(i);  // Paper - replace chunk map
+     }
+ 
+     @Nullable
+     public PlayerChunk getVisibleChunk(long i) { // Paper - protected -> public
+-        return (PlayerChunk) this.visibleChunks.get(i);
++        // Paper start - replace chunk map
++        if (MinecraftServer.getServer().serverThread == Thread.currentThread()) {
++            return this.chunkMap.getVisible(i);
++        }
++        return this.chunkMap.getVisibleAsync(i);
++        // Paper end
+     }
+ 
+     protected IntSupplier c(long i) {
+@@ -331,7 +342,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+                     playerchunk = new PlayerChunk(new ChunkCoordIntPair(i), j, this.lightEngine, this.p, this);
+                 }
+ 
+-                this.updatingChunks.put(i, playerchunk);
++                this.chunkMap.queueUpdate(i, playerchunk); // Paper - replace chunk map
+                 this.updatingChunksModified = true;
+             }
+ 
+@@ -383,7 +394,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+ 
+     protected void save(boolean flag) {
+         if (flag) {
+-            List<PlayerChunk> list = (List) this.visibleChunks.values().stream().filter(PlayerChunk::hasBeenLoaded).peek(PlayerChunk::m).collect(Collectors.toList());
++            List<PlayerChunk> list = (List) this.chunkMap.getVisibleValues().stream().filter(PlayerChunk::hasBeenLoaded).peek(PlayerChunk::m).collect(Collectors.toList()); // Paper - replace chunk map
+             MutableBoolean mutableboolean = new MutableBoolean();
+ 
+             do {
+@@ -411,7 +422,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+ //            this.i(); // Paper - nuke IOWorker
+             PlayerChunkMap.LOGGER.info("ThreadedAnvilChunkStorage ({}): All chunks are saved", this.w.getName());
+         } else {
+-            this.visibleChunks.values().stream().filter(PlayerChunk::hasBeenLoaded).forEach((playerchunk) -> {
++            this.chunkMap.getVisibleValues().stream().filter(PlayerChunk::hasBeenLoaded).forEach((playerchunk) -> { // Paper - replace chunk map
+                 IChunkAccess ichunkaccess = (IChunkAccess) playerchunk.getChunkSave().getNow(null); // CraftBukkit - decompile error
+ 
+                 if (ichunkaccess instanceof ProtoChunkExtension || ichunkaccess instanceof Chunk) {
+@@ -454,7 +465,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         while (longiterator.hasNext()) { // Spigot
+             long j = longiterator.nextLong();
+             longiterator.remove(); // Spigot
+-            PlayerChunk playerchunk = (PlayerChunk) this.updatingChunks.remove(j);
++            PlayerChunk playerchunk = (PlayerChunk) this.chunkMap.queueRemove(j); // Paper - replace chunk map
+ 
+             if (playerchunk != null) {
+                 this.pendingUnload.put(j, playerchunk);
+@@ -581,7 +592,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         if (!this.updatingChunksModified) {
+             return false;
+         } else {
+-            this.visibleChunks = this.updatingChunks.clone();
++            this.chunkMap.performUpdates(); // Paper - replace chunk map
+             this.updatingChunksModified = false;
+             return true;
+         }
+@@ -982,7 +993,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+ 
+             this.viewDistance = j;
+             this.chunkDistanceManager.a(this.viewDistance);
+-            ObjectIterator objectiterator = this.updatingChunks.values().iterator();
++            Iterator objectiterator = this.chunkMap.getUpdatingValues().iterator(); // Paper - replace chunk map
+ 
+             while (objectiterator.hasNext()) {
+                 PlayerChunk playerchunk = (PlayerChunk) objectiterator.next();
+@@ -1002,9 +1013,14 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+     }
+ 
+     protected void sendChunk(EntityPlayer entityplayer, ChunkCoordIntPair chunkcoordintpair, Packet<?>[] apacket, boolean flag, boolean flag1) {
++        // Paper - remove allocation of ChunkCoordIntPair
++        this.sendChunk(entityplayer, chunkcoordintpair.x, chunkcoordintpair.z, apacket, flag, flag1);
++    }
++    protected void sendChunk(EntityPlayer entityplayer, int chunkX, int chunkZ, Packet<?>[] apacket, boolean flag, boolean flag1) {
++        // Paper end
+         if (entityplayer.world == this.world) {
+             if (flag1 && !flag) {
+-                PlayerChunk playerchunk = this.getVisibleChunk(chunkcoordintpair.pair());
++                PlayerChunk playerchunk = this.getVisibleChunk(ChunkCoordIntPair.pair(chunkX, chunkZ)); // Paper - remove allocation of ChunkCoordIntPair
+ 
+                 if (playerchunk != null) {
+                     Chunk chunk = playerchunk.getChunk();
+@@ -1013,19 +1029,19 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+                         this.a(entityplayer, apacket, chunk);
+                     }
+ 
+-                    PacketDebug.a(this.world, chunkcoordintpair);
++                    //PacketDebug.a(this.world, chunkcoordintpair); // Paper - remove allocation of ChunkCoordIntPair (this function is a NO-OP)
+                 }
+             }
+ 
+             if (!flag1 && flag) {
+-                entityplayer.a(chunkcoordintpair);
++                entityplayer.sendChunkUnload(chunkX, chunkZ); // Paper - remove allocation of ChunkCoordIntPair
+             }
+ 
+         }
+     }
+ 
+     public int d() {
+-        return this.visibleChunks.size();
++        return this.chunkMap.getVisibleSizeAsync(); // Paper - replace chunk map
+     }
+ 
+     protected PlayerChunkMap.a e() {
+@@ -1033,12 +1049,12 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+     }
+ 
+     protected Iterable<PlayerChunk> f() {
+-        return Iterables.unmodifiableIterable(this.visibleChunks.values());
++        return Iterables.unmodifiableIterable(this.chunkMap.getUpdatingValuesCopy()); // Paper - replace chunk map, thankfully nothing uses this (TODO check on update)
+     }
+ 
+     void a(Writer writer) throws IOException {
+         CSVWriter csvwriter = CSVWriter.a().a("x").a("z").a("level").a("in_memory").a("status").a("full_status").a("accessible_ready").a("ticking_ready").a("entity_ticking_ready").a("ticket").a("spawning").a("entity_count").a("block_entity_count").a(writer);
+-        ObjectBidirectionalIterator objectbidirectionaliterator = this.visibleChunks.long2ObjectEntrySet().iterator();
++        ObjectBidirectionalIterator objectbidirectionaliterator = this.chunkMap.getVisibleMap().long2ObjectEntrySet().iterator(); // Paper - replace chunk map
+ 
+         while (objectbidirectionaliterator.hasNext()) {
+             Entry<PlayerChunk> entry = (Entry) objectbidirectionaliterator.next();
+@@ -1277,11 +1293,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+             }
+         }
+ 
++        Packet[] cachedPackets = new Packet[2]; // Paper
+         for (int k = i - this.viewDistance; k <= i + this.viewDistance; ++k) {
+             for (int l = j - this.viewDistance; l <= j + this.viewDistance; ++l) {
+-                ChunkCoordIntPair chunkcoordintpair = new ChunkCoordIntPair(k, l);
+-
+-                this.sendChunk(entityplayer, chunkcoordintpair, new Packet[2], !flag, flag);
++                // Paper start - remove excess object creation (ChunkCoordIntPair and Packet[])
++                this.sendChunk(entityplayer, k, l, cachedPackets, !flag, flag);
++                java.util.Arrays.fill(cachedPackets, null);
++                // Paper end
+             }
+         }
+ 
+@@ -1347,6 +1365,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         int k1;
+         int l1;
+ 
++        Packet[] cachedPackets = new Packet[2]; // Paper
++
+         if (Math.abs(i1 - i) <= this.viewDistance * 2 && Math.abs(j1 - j) <= this.viewDistance * 2) {
+             k1 = Math.min(i, i1) - this.viewDistance;
+             l1 = Math.min(j, j1) - this.viewDistance;
+@@ -1355,33 +1375,41 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+ 
+             for (int k2 = k1; k2 <= i2; ++k2) {
+                 for (int l2 = l1; l2 <= j2; ++l2) {
+-                    ChunkCoordIntPair chunkcoordintpair = new ChunkCoordIntPair(k2, l2);
+-                    boolean flag3 = a(chunkcoordintpair, i1, j1) <= this.viewDistance;
+-                    boolean flag4 = a(chunkcoordintpair, i, j) <= this.viewDistance;
++                    // Paper - remove allocation of ChunkCoordIntPair
++                    boolean flag3 = getSquareRadiusDistance(k2, l2, i1, j1) <= this.viewDistance;
++                    boolean flag4 = getSquareRadiusDistance(k2, l2, i, j) <= this.viewDistance;
+ 
+-                    this.sendChunk(entityplayer, chunkcoordintpair, new Packet[2], flag3, flag4);
++                    this.sendChunk(entityplayer, k2, l2, cachedPackets, flag3, flag4);
++                    java.util.Arrays.fill(cachedPackets, null);
++                    // Paper end
+                 }
+             }
+         } else {
+-            ChunkCoordIntPair chunkcoordintpair1;
++            // Paper - remove allocation of ChunkCoordIntPair, fail compile if used
+             boolean flag5;
+             boolean flag6;
+ 
+             for (k1 = i1 - this.viewDistance; k1 <= i1 + this.viewDistance; ++k1) {
+                 for (l1 = j1 - this.viewDistance; l1 <= j1 + this.viewDistance; ++l1) {
+-                    chunkcoordintpair1 = new ChunkCoordIntPair(k1, l1);
++                    // Paper - remove allocation of ChunkCoordIntPair
+                     flag5 = true;
+                     flag6 = false;
+-                    this.sendChunk(entityplayer, chunkcoordintpair1, new Packet[2], true, false);
++                    // Paper start - remove allocation of ChunkCoordIntPair
++                    this.sendChunk(entityplayer, k1, l1, cachedPackets, true, false);
++                    java.util.Arrays.fill(cachedPackets, null);
++                    // Paper end
+                 }
+             }
+ 
+             for (k1 = i - this.viewDistance; k1 <= i + this.viewDistance; ++k1) {
+                 for (l1 = j - this.viewDistance; l1 <= j + this.viewDistance; ++l1) {
+-                    chunkcoordintpair1 = new ChunkCoordIntPair(k1, l1);
++                    // Paper - remove allocation of ChunkCoordIntPair
+                     flag5 = false;
+                     flag6 = true;
+-                    this.sendChunk(entityplayer, chunkcoordintpair1, new Packet[2], false, true);
++                    // Paper start - remove allocation of ChunkCoordIntPair
++                    this.sendChunk(entityplayer, k1, l1, cachedPackets, false, true);
++                    java.util.Arrays.fill(cachedPackets, null);
++                    // Paper end - remove allocation of ChunkCoordIntPair
+                 }
+             }
+         }
+@@ -1645,9 +1673,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         public void updatePlayer(EntityPlayer entityplayer) {
+             org.spigotmc.AsyncCatcher.catchOp("player tracker update"); // Spigot
+             if (entityplayer != this.tracker) {
+-                Vec3D vec3d = entityplayer.getPositionVector().d(this.tracker.getPositionVector()); // MC-155077, SPIGOT-5113
++                // Paper start - remove allocation of Vec3D here
++                // keep MC-155077 fix
++                double vec3d_dx = entityplayer.locX() - this.tracker.locX();
++                double vec3d_dz = entityplayer.locZ() - this.tracker.locZ();
++                // Paper end
+                 int i = Math.min(this.b(), (PlayerChunkMap.this.viewDistance - 1) * 16);
+-                boolean flag = vec3d.x >= (double) (-i) && vec3d.x <= (double) i && vec3d.z >= (double) (-i) && vec3d.z <= (double) i && this.tracker.a(entityplayer);
++                boolean flag = vec3d_dx >= (double) (-i) && vec3d_dx <= (double) i && vec3d_dz >= (double) (-i) && vec3d_dz <= (double) i && this.tracker.a(entityplayer); // Paper start - remove allocation of Vec3D here
+ 
+                 if (flag) {
+                     boolean flag1 = this.tracker.attachedToPlayer;
+diff --git a/src/main/java/net/minecraft/server/PlayerInventory.java b/src/main/java/net/minecraft/server/PlayerInventory.java
+index d117578f..d7a41dce 100644
+--- a/src/main/java/net/minecraft/server/PlayerInventory.java
++++ b/src/main/java/net/minecraft/server/PlayerInventory.java
+@@ -559,8 +559,10 @@ public class PlayerInventory implements IInventory, INamableTileEntity {
+ 
+         NonNullList nonnulllist;
+ 
+-        for (Iterator iterator = this.f.iterator(); iterator.hasNext(); i -= nonnulllist.size()) {
+-            nonnulllist = (NonNullList) iterator.next();
++        // Paper start - reduce iterator creation
++        for (int index = 0, len = this.f.size(); index < len; ++index, i -= nonnulllist.size()) {
++            nonnulllist = this.f.get(index);
++            // Paper end
+             if (i < nonnulllist.size()) {
+                 list = nonnulllist;
+                 break;
+diff --git a/src/main/java/net/minecraft/server/VoxelShapeArray.java b/src/main/java/net/minecraft/server/VoxelShapeArray.java
+index caf297fe..5d35bb29 100644
+--- a/src/main/java/net/minecraft/server/VoxelShapeArray.java
++++ b/src/main/java/net/minecraft/server/VoxelShapeArray.java
+@@ -11,7 +11,7 @@ public final class VoxelShapeArray extends VoxelShape {
+     private final DoubleList d;
+ 
+     protected VoxelShapeArray(VoxelShapeDiscrete voxelshapediscrete, double[] adouble, double[] adouble1, double[] adouble2) {
+-        this(voxelshapediscrete, (DoubleList) DoubleArrayList.wrap(Arrays.copyOf(adouble, voxelshapediscrete.b() + 1)), (DoubleList) DoubleArrayList.wrap(Arrays.copyOf(adouble1, voxelshapediscrete.c() + 1)), (DoubleList) DoubleArrayList.wrap(Arrays.copyOf(adouble2, voxelshapediscrete.d() + 1)));
++        this(voxelshapediscrete, com.destroystokyo.paper.util.list.ExtendedDoubleArrayList.getList(adouble, voxelshapediscrete.b() + 1), com.destroystokyo.paper.util.list.ExtendedDoubleArrayList.getList(adouble1, voxelshapediscrete.c() + 1), com.destroystokyo.paper.util.list.ExtendedDoubleArrayList.getList(adouble2, voxelshapediscrete.d() + 1)); // Paper - remove iterator allocation
+     }
+ 
+     VoxelShapeArray(VoxelShapeDiscrete voxelshapediscrete, DoubleList doublelist, DoubleList doublelist1, DoubleList doublelist2) {
+diff --git a/src/main/java/net/minecraft/server/VoxelShapeCubePoint.java b/src/main/java/net/minecraft/server/VoxelShapeCubePoint.java
+index 9e09671d..3daab9dc 100644
+--- a/src/main/java/net/minecraft/server/VoxelShapeCubePoint.java
++++ b/src/main/java/net/minecraft/server/VoxelShapeCubePoint.java
+@@ -2,7 +2,7 @@ package net.minecraft.server;
+ 
+ import it.unimi.dsi.fastutil.doubles.AbstractDoubleList;
+ 
+-public class VoxelShapeCubePoint extends AbstractDoubleList {
++public class VoxelShapeCubePoint extends com.destroystokyo.paper.util.list.ExtendedAbstractDoubleList { // Paper - reduce iterator creation
+ 
+     private final int a;
+ 
+diff --git a/src/main/java/net/minecraft/server/VoxelShapeMergerList.java b/src/main/java/net/minecraft/server/VoxelShapeMergerList.java
+index 71d2ae2a..e3b3611a 100644
+--- a/src/main/java/net/minecraft/server/VoxelShapeMergerList.java
++++ b/src/main/java/net/minecraft/server/VoxelShapeMergerList.java
+@@ -18,7 +18,7 @@ public final class VoxelShapeMergerList implements VoxelShapeMerger {
+         int l = doublelist1.size();
+         int i1 = k + l;
+ 
+-        this.a = new DoubleArrayList(i1);
++        this.a = new com.destroystokyo.paper.util.list.ExtendedDoubleArrayList(i1); // Paper - remove iterator creation
+         this.b = new IntArrayList(i1);
+         this.c = new IntArrayList(i1);
+ 
+diff --git a/src/main/java/net/minecraft/server/VoxelShapes.java b/src/main/java/net/minecraft/server/VoxelShapes.java
+index 08c83c62..121f1517 100644
+--- a/src/main/java/net/minecraft/server/VoxelShapes.java
++++ b/src/main/java/net/minecraft/server/VoxelShapes.java
+@@ -19,7 +19,7 @@ public final class VoxelShapes {
+         return new VoxelShapeCube(voxelshapebitset);
+     });
+     public static final VoxelShape a = create(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+-    private static final VoxelShape c = new VoxelShapeArray(new VoxelShapeBitSet(0, 0, 0), new DoubleArrayList(new double[]{0.0D}), new DoubleArrayList(new double[]{0.0D}), new DoubleArrayList(new double[]{0.0D}));
++    private static final VoxelShape c = new VoxelShapeArray(new VoxelShapeBitSet(0, 0, 0), new com.destroystokyo.paper.util.list.ExtendedDoubleArrayList(new double[]{0.0D}), new com.destroystokyo.paper.util.list.ExtendedDoubleArrayList(new double[]{0.0D}), new com.destroystokyo.paper.util.list.ExtendedDoubleArrayList(new double[]{0.0D})); // Paper - remove iterator allocation
+ 
+     public static VoxelShape a() {
+         return VoxelShapes.c;
+diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
+index b95e1072..ca92f2a7 100644
+--- a/src/main/java/net/minecraft/server/World.java
++++ b/src/main/java/net/minecraft/server/World.java
+@@ -1572,10 +1572,19 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+     public abstract TagRegistry t();
+ 
+     public BlockPosition a(int i, int j, int k, int l) {
++        // Paper start - reduce blockpos allocation
++        BlockPosition.MutableBlockPosition ret = new BlockPosition.MutableBlockPosition();
++        this.getRandomBlockPosition(i, j, k, l, ret);
++        return ret.immutableCopy();
++    }
++
++    public BlockPosition.MutableBlockPosition getRandomBlockPosition(int i, int j, int k, int l, BlockPosition.MutableBlockPosition out) {
++        // Paper end
+         this.i = this.i * 3 + 1013904223;
+         int i1 = this.i >> 2;
+ 
+-        return new BlockPosition(i + (i1 & 15), j + (i1 >> 16 & l), k + (i1 >> 8 & 15));
++        out.setValues(i + (i1 & 15), j + (i1 >> 16 & l), k + (i1 >> 8 & 15)); // Paper
++        return out; // Paper
+     }
+ 
+     public boolean isSavingDisabled() {
+diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
+index 4e9c9493..6b3a5bc3 100644
+--- a/src/main/java/net/minecraft/server/WorldServer.java
++++ b/src/main/java/net/minecraft/server/WorldServer.java
+@@ -449,7 +449,7 @@ public class WorldServer extends World {
+ 
+             gameprofilerfiller.exitEnter("regular");
+             this.tickingEntities = true;
+-            ObjectIterator objectiterator = this.entitiesById.int2ObjectEntrySet().iterator();
++            ObjectIterator objectiterator = ((Int2ObjectLinkedOpenHashMap)this.entitiesById).int2ObjectEntrySet().fastIterator(); // Paper - reduce entry allocation rate
+ 
+             org.spigotmc.ActivationRange.activateEntities(this); // Spigot
+             timings.entityTick.startTiming(); // Spigot
+@@ -523,6 +523,8 @@ public class WorldServer extends World {
+         });
+     }
+ 
++    private final BlockPosition.MutableBlockPosition chunkTickMutablePosition = new BlockPosition.MutableBlockPosition(); // Paper - use mutable blockpos to reduce allocation rate of blockpos
++
+     public void a(Chunk chunk, int i) {
+         ChunkCoordIntPair chunkcoordintpair = chunk.getPos();
+         boolean flag = this.isRaining();
+@@ -531,10 +533,10 @@ public class WorldServer extends World {
+         GameProfilerFiller gameprofilerfiller = this.getMethodProfiler();
+ 
+         gameprofilerfiller.enter("thunder");
+-        BlockPosition blockposition;
++        final BlockPosition.MutableBlockPosition blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
+ 
+         if (!this.paperConfig.disableThunder && flag && this.U() && this.random.nextInt(100000) == 0) { // Paper - Disable thunder
+-            blockposition = this.a(this.a(j, 0, k, 15));
++            blockposition.setValues(this.a(this.getRandomBlockPosition(j, 0, k, 15, blockposition))); // Paper - use mutable blockpos to reduce allocation rate
+             if (this.isRainingAt(blockposition)) {
+                 DifficultyDamageScaler difficultydamagescaler = this.getDamageScaler(blockposition);
+                 boolean flag1 = this.getGameRules().getBoolean(GameRules.DO_MOB_SPAWNING) && this.random.nextDouble() < (double) difficultydamagescaler.b() * paperConfig.skeleHorseSpawnChance; // Paper
+@@ -554,7 +556,7 @@ public class WorldServer extends World {
+ 
+         gameprofilerfiller.exitEnter("iceandsnow");
+         if (!this.paperConfig.disableIceAndSnow && this.random.nextInt(16) == 0) { // Paper - Disable ice and snow
+-            blockposition = this.getHighestBlockYAt(HeightMap.Type.MOTION_BLOCKING, this.a(j, 0, k, 15));
++            blockposition.setValues(this.getHighestBlockYAt(HeightMap.Type.MOTION_BLOCKING, this.getRandomBlockPosition(j, 0, k, 15, blockposition))); // Paper - use mutable blockpos to reduce allocation rate
+             BlockPosition blockposition1 = blockposition.down();
+             BiomeBase biomebase = this.getBiome(blockposition);
+ 
+@@ -584,7 +586,7 @@ public class WorldServer extends World {
+                     int j1 = chunksection.getYPosition();
+ 
+                     for (int k1 = 0; k1 < i; ++k1) {
+-                        BlockPosition blockposition2 = this.a(j, j1, k, 15);
++                        BlockPosition blockposition2 = this.getRandomBlockPosition(j, j1, k, 15, blockposition); // Paper - use mutable to reduce allocation rate
+ 
+                         gameprofilerfiller.enter("randomTick");
+                         IBlockData iblockdata = chunksection.getType(blockposition2.getX() - j, blockposition2.getY() - j1, blockposition2.getZ() - k);
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+index 87395de2..87e8cf5e 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+@@ -289,9 +289,9 @@ public class CraftWorld implements World {
+     }
+     public int getTileEntityCount() {
+         // We don't use the full world tile entity list, so we must iterate chunks
+-        Long2ObjectLinkedOpenHashMap<PlayerChunk> chunks = world.getChunkProvider().playerChunkMap.visibleChunks;
++        Iterable<PlayerChunk> chunks = world.getChunkProvider().playerChunkMap.chunkMap.getVisibleValues(); // Paper - replace chunk map
+         int size = 0;
+-        for (net.minecraft.server.PlayerChunk playerchunk : chunks.values()) {
++        for (net.minecraft.server.PlayerChunk playerchunk : chunks) {  // Paper - replace chunk map
+             net.minecraft.server.Chunk chunk = playerchunk.getChunk();
+             if (chunk == null) {
+                 continue;
+@@ -306,7 +306,7 @@ public class CraftWorld implements World {
+     public int getChunkCount() {
+         int ret = 0;
+ 
+-        for (PlayerChunk chunkHolder : world.getChunkProvider().playerChunkMap.visibleChunks.values()) {
++        for (PlayerChunk chunkHolder : world.getChunkProvider().playerChunkMap.chunkMap.getVisibleValues()) {  // Paper - replace chunk map
+             if (chunkHolder.getChunk() != null) {
+                 ++ret;
+             }
+@@ -434,8 +434,8 @@ public class CraftWorld implements World {
+ 
+     @Override
+     public Chunk[] getLoadedChunks() {
+-        Long2ObjectLinkedOpenHashMap<PlayerChunk> chunks = world.getChunkProvider().playerChunkMap.visibleChunks;
+-        return chunks.values().stream().map(PlayerChunk::getFullChunk).filter(Objects::nonNull).map(net.minecraft.server.Chunk::getBukkitChunk).toArray(Chunk[]::new);
++        Collection<PlayerChunk> chunks = world.getChunkProvider().playerChunkMap.chunkMap.getVisibleValues(); // Paper - replace chunk map
++        return chunks.stream().map(PlayerChunk::getFullChunk).filter(Objects::nonNull).map(net.minecraft.server.Chunk::getBukkitChunk).toArray(Chunk[]::new); // Paper - replace chunk map
+     }
+ 
+     @Override
+-- 
+2.24.0.windows.2
+

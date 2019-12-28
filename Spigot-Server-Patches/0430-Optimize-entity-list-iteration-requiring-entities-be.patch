@@ -1,0 +1,214 @@
+From 917514bfba46ea5c381a2730c52167d37728ac0d Mon Sep 17 00:00:00 2001
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Fri, 27 Dec 2019 18:10:17 -0800
+Subject: [PATCH] Optimize entity list iteration requiring entities be in
+ loaded chunks
+
+We retain a list of loaded entities specifically for this usage
+
+diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
+index 4bd53e9d..608122b8 100644
+--- a/src/main/java/net/minecraft/server/Chunk.java
++++ b/src/main/java/net/minecraft/server/Chunk.java
+@@ -441,6 +441,11 @@ public class Chunk implements IChunkAccess {
+         entity.chunkZ = this.loc.z;
+         this.entitySlices[k].add(entity);
+         this.entities.add(entity); // Paper - per chunk entity list
++        // Paper start - loaded entity list for world
++        if (this.playerChunk != null && this.playerChunk.isFullChunkReady()) {
++            ((WorldServer)this.world).loadedEntities.add(entity);
++        }
++        // Paper end
+         // Paper start
+         if (entity instanceof EntityItem) {
+             itemCounts[k]++;
+diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
+index 95651314..ea7ced28 100644
+--- a/src/main/java/net/minecraft/server/PlayerChunk.java
++++ b/src/main/java/net/minecraft/server/PlayerChunk.java
+@@ -467,6 +467,9 @@ public class PlayerChunk {
+                     either.left().get().playerChunk = PlayerChunk.this;
+ 
+ 
++                    // Paper start - world loaded entity list
++                    PlayerChunk.this.chunkMap.world.addLoadedEntities(either.left().get());
++                    // Paper end
+                 }
+                 return either;
+             });
+@@ -479,6 +482,12 @@ public class PlayerChunk {
+             this.fullChunkFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
+             ++this.fullChunkCreateCount;
+             this.isFullChunkReady = false; // Paper - cache ticking ready status
++            // Paper start - world loaded entity list
++            Chunk loadedChunk = (Chunk)((Either)completablefuture.getNow(PlayerChunk.UNLOADED_CHUNK_ACCESS)).left().orElse(null);
++            if (loadedChunk != null) {
++                PlayerChunk.this.chunkMap.world.removeLoadedEntities(loadedChunk);
++            }
++            // Paper end
+             this.a(((CompletableFuture<Either<Chunk, PlayerChunk.Failure>>) completablefuture).thenApply((either1) -> { // CraftBukkit - decompile error
+                 playerchunkmap.getClass();
+                 return either1.ifLeft(playerchunkmap::a);
+diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
+index 6b3a5bc3..aa2f647a 100644
+--- a/src/main/java/net/minecraft/server/WorldServer.java
++++ b/src/main/java/net/minecraft/server/WorldServer.java
+@@ -161,6 +161,26 @@ public class WorldServer extends World {
+     }
+     // Paper end
+ 
++    // Paper start - loaded entity list
++    public final com.destroystokyo.paper.util.maplist.EntityList loadedEntities = new com.destroystokyo.paper.util.maplist.EntityList();
++
++    void addLoadedEntities(final Chunk chunk) {
++        final com.destroystokyo.paper.util.maplist.EntityList list = chunk.entities;
++        final Entity[] entities = list.getRawData();
++        for (int i = 0, size = list.size(); i < size; ++i) {
++            this.loadedEntities.add(entities[i]);
++        }
++    }
++
++    void removeLoadedEntities(final Chunk chunk) {
++        final com.destroystokyo.paper.util.maplist.EntityList list = chunk.entities;
++        final Entity[] entities = list.getRawData();
++        for (int i = 0, size = list.size(); i < size; ++i) {
++            this.loadedEntities.remove(entities[i]);
++        }
++    }
++    // Paper end
++
+     // Add env and gen to constructor
+     public WorldServer(MinecraftServer minecraftserver, Executor executor, WorldNBTStorage worldnbtstorage, WorldData worlddata, DimensionManager dimensionmanager, GameProfilerFiller gameprofilerfiller, WorldLoadListener worldloadlistener, org.bukkit.World.Environment env, org.bukkit.generator.ChunkGenerator gen) {
+         super(worlddata, dimensionmanager, (world, worldprovider) -> {
+@@ -1330,6 +1350,7 @@ public class WorldServer extends World {
+         if (entity instanceof EntityInsentient) {
+             this.navigators.remove(((EntityInsentient) entity).getNavigation());
+         }
++        this.loadedEntities.remove(entity); // Paper - loaded entity list for world
+         new com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent(entity.getBukkitEntity()).callEvent(); // Paper - fire while valid
+         entity.valid = false; // CraftBukkit
+     }
+@@ -1386,6 +1407,11 @@ public class WorldServer extends World {
+             }
+             // Paper end
+             entity.shouldBeRemoved = false; // Paper - shouldn't be removed after being re-added
++            // Paper start - loaded entity list
++            if (this.isChunkLoaded(com.destroystokyo.paper.util.Util.getChunkCoordinate(entity.locX()), com.destroystokyo.paper.util.Util.getChunkCoordinate(entity.locZ()))) {
++                this.loadedEntities.add(entity);
++            }
++            // Paper end
+             new com.destroystokyo.paper.event.entity.EntityAddToWorldEvent(entity.getBukkitEntity()).callEvent(); // Paper - fire while valid
+         }
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+index 2c6897db..70f6c32b 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+@@ -1081,16 +1081,16 @@ public class CraftWorld implements World {
+ 
+     @Override
+     public List<Entity> getEntities() {
+-        List<Entity> list = new ArrayList<Entity>();
++        List<Entity> list = new ArrayList<Entity>(world.loadedEntities.size()); // Paper - optimise this call
+ 
+-        for (Object o : world.entitiesById.values()) {
++        for (Object o : world.loadedEntities) { // Paper - optimise this call
+             if (o instanceof net.minecraft.server.Entity) {
+                 net.minecraft.server.Entity mcEnt = (net.minecraft.server.Entity) o;
+                 if (mcEnt.shouldBeRemoved) continue; // Paper
+                 Entity bukkitEntity = mcEnt.getBukkitEntity();
+ 
+                 // Assuming that bukkitEntity isn't null
+-                if (bukkitEntity != null && bukkitEntity.isValid()) {
++                if (bukkitEntity != null && CraftEntity.canBeSeenByPlugins(bukkitEntity)) { // Paper - optimise this call
+                     list.add(bukkitEntity);
+                 }
+             }
+@@ -1101,16 +1101,16 @@ public class CraftWorld implements World {
+ 
+     @Override
+     public List<LivingEntity> getLivingEntities() {
+-        List<LivingEntity> list = new ArrayList<LivingEntity>();
++        List<LivingEntity> list = new ArrayList<LivingEntity>(world.loadedEntities.size()); // Paper - optimise this call
+ 
+-        for (Object o : world.entitiesById.values()) {
++        for (Object o : world.loadedEntities) { // Paper - optimise this call
+             if (o instanceof net.minecraft.server.Entity) {
+                 net.minecraft.server.Entity mcEnt = (net.minecraft.server.Entity) o;
+                 if (mcEnt.shouldBeRemoved) continue; // Paper
+                 Entity bukkitEntity = mcEnt.getBukkitEntity();
+ 
+                 // Assuming that bukkitEntity isn't null
+-                if (bukkitEntity != null && bukkitEntity instanceof LivingEntity && bukkitEntity.isValid()) {
++                if (bukkitEntity != null && bukkitEntity instanceof LivingEntity && CraftEntity.canBeSeenByPlugins(bukkitEntity)) { // Paper - optimise this call
+                     list.add((LivingEntity) bukkitEntity);
+                 }
+             }
+@@ -1131,7 +1131,7 @@ public class CraftWorld implements World {
+     public <T extends Entity> Collection<T> getEntitiesByClass(Class<T> clazz) {
+         Collection<T> list = new ArrayList<T>();
+ 
+-        for (Object entity: world.entitiesById.values()) {
++        for (Object entity: world.loadedEntities) { // Paper - optimise this call
+             if (entity instanceof net.minecraft.server.Entity) {
+                 if (((net.minecraft.server.Entity) entity).shouldBeRemoved) continue; // Paper
+                 Entity bukkitEntity = ((net.minecraft.server.Entity) entity).getBukkitEntity();
+@@ -1142,7 +1142,7 @@ public class CraftWorld implements World {
+ 
+                 Class<?> bukkitClass = bukkitEntity.getClass();
+ 
+-                if (clazz.isAssignableFrom(bukkitClass) && bukkitEntity.isValid()) {
++                if (clazz.isAssignableFrom(bukkitClass) && CraftEntity.canBeSeenByPlugins(bukkitEntity)) { // Paper - optimise this call
+                     list.add((T) bukkitEntity);
+                 }
+             }
+@@ -1155,12 +1155,12 @@ public class CraftWorld implements World {
+     public Collection<Entity> getEntitiesByClasses(Class<?>... classes) {
+         Collection<Entity> list = new ArrayList<Entity>();
+ 
+-        for (Object entity: world.entitiesById.values()) {
++        for (Object entity: world.loadedEntities) { // Paper - optimise this call
+             if (entity instanceof net.minecraft.server.Entity) {
+                 if (((net.minecraft.server.Entity) entity).shouldBeRemoved) continue; // Paper
+                 Entity bukkitEntity = ((net.minecraft.server.Entity) entity).getBukkitEntity();
+ 
+-                if (bukkitEntity == null) {
++                if (bukkitEntity == null || !CraftEntity.canBeSeenByPlugins(bukkitEntity)) { // Paper - optimise this call
+                     continue;
+                 }
+ 
+@@ -1168,7 +1168,7 @@ public class CraftWorld implements World {
+ 
+                 for (Class<?> clazz : classes) {
+                     if (clazz.isAssignableFrom(bukkitClass)) {
+-                        if (bukkitEntity.isValid()) {
++                        if (true) { // Paper optimise this call
+                             list.add(bukkitEntity);
+                         }
+                         break;
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
+index dfa15372..1f369202 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
+@@ -180,6 +180,18 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+         this.entity = entity;
+     }
+ 
++    // Paper start
++    // note: this does not check isChunkLoaded, use Entity#isValid to do that
++    public static boolean canBeSeenByPlugins(org.bukkit.entity.Entity entity) {
++        Entity handle = ((CraftEntity)entity).getHandle();
++        // TODO
++        // isAlive is a dumb choice, given living entities aren't alive (but are in the world) if health < 0
++        // this needs to be brought up to spigot to fix though, we are NOT breaking api implementation, especially
++        // if no-one's complained.
++        return !handle.shouldBeRemoved && handle.isAlive() && handle.valid;
++    }
++    // Paper end
++
+     @Override
+     public Chunk getChunk() {
+         net.minecraft.server.Chunk currentChunk = entity.getCurrentChunk();
+-- 
+2.24.0.windows.2
+

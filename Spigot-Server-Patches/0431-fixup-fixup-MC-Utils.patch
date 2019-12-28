@@ -1,0 +1,29 @@
+From e5941ed3916dc98131d2e353b1c675fcc8b4e00a Mon Sep 17 00:00:00 2001
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Fri, 27 Dec 2019 18:14:19 -0800
+Subject: [PATCH] fixup! fixup! MC Utils
+
+
+diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
+index 608122b8..11eff5fe 100644
+--- a/src/main/java/net/minecraft/server/Chunk.java
++++ b/src/main/java/net/minecraft/server/Chunk.java
+@@ -642,6 +642,7 @@ public class Chunk implements IChunkAccess {
+     // CraftBukkit start
+     public void loadCallback() {
+         org.bukkit.Server server = this.world.getServer();
++        ((WorldServer)this.world).getChunkProvider().addLoadedChunk(this); // Paper
+         if (server != null) {
+             /*
+              * If it's a new world, the first few chunks are generated inside
+@@ -677,6 +678,7 @@ public class Chunk implements IChunkAccess {
+     }
+ 
+     public void unloadCallback() {
++        ((WorldServer)this.world).getChunkProvider().removeLoadedChunk(this); // Paper
+         org.bukkit.Server server = this.world.getServer();
+         org.bukkit.event.world.ChunkUnloadEvent unloadEvent = new org.bukkit.event.world.ChunkUnloadEvent(this.bukkitChunk, this.isNeedsSaving());
+         server.getPluginManager().callEvent(unloadEvent);
+-- 
+2.24.0.windows.2
+
