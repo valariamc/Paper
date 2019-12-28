@@ -1,4 +1,4 @@
-From aa513374e71e66de1fd99769e93dc62a7f549b91 Mon Sep 17 00:00:00 2001
+From 8aabb98aa63525df3bc502f7b9093fc75b1609ff Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 27 Dec 2019 14:20:40 -0800
 Subject: [PATCH] Per player view distance implementation
@@ -70,7 +70,7 @@ index 1d7d1ffbf..45f7cf162 100644
 +    }
  }
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 8c1945687..2f884d706 100644
+index 8c1945687..0fd39350a 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
 @@ -27,12 +27,12 @@ import org.apache.logging.log4j.Logger;
@@ -127,7 +127,7 @@ index 8c1945687..2f884d706 100644
          }
  
      }
-@@ -249,9 +254,195 @@ public abstract class ChunkMapDistance {
+@@ -249,9 +254,202 @@ public abstract class ChunkMapDistance {
          return s;
      }
  
@@ -206,9 +206,16 @@ index 8c1945687..2f884d706 100644
 +                // handle movement
 +
 +                int radius = lastLoadedRadius + 1;
++                int viewDistance = chunkMap.playerViewDistanceTicketMap.getLastViewDistance(player);
++
++                if (radius > viewDistance) {
++                    // distance map will unload our chunks
++                    this.lastLoadedRadiusByPlayer.put(playerId, viewDistance);
++                    continue;
++                }
 +
 +                radius_loop:
-+                for (int viewDistance = chunkMap.playerViewDistanceTicketMap.getLastViewDistance(player); radius <= viewDistance; ++radius) {
++                for (; radius <= viewDistance; ++radius) {
 +                    for (int offset = 0; offset <= viewDistance; ++offset) {
 +                        // try to load the chunks closest to the player by distance
 +                        // so instead of going left->right on the x axis, we start at the center of the view distance square

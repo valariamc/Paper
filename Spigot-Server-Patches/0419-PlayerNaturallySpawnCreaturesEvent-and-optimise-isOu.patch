@@ -1,4 +1,4 @@
-From 84a86de4ddb61bafcd724881f5bf2667090bde59 Mon Sep 17 00:00:00 2001
+From 73919f0c0e0c569c6714594b62e46749b5efd498 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 27 Dec 2019 16:56:42 -0800
 Subject: [PATCH] PlayerNaturallySpawnCreaturesEvent and optimise
@@ -15,7 +15,7 @@ For isOutsideRange optimisation (not apart of the patch by aikar),
 we optimise the check by using a distance map
 
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 2f884d706..e3f5d9fca 100644
+index 0fd39350a..f9ed8a0e1 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
 @@ -31,7 +31,7 @@ public abstract class ChunkMapDistance {
@@ -54,7 +54,7 @@ index 2f884d706..e3f5d9fca 100644
              //this.g.b(i, Integer.MAX_VALUE, false); // Paper - no longer used
          }
  
-@@ -445,13 +445,17 @@ public abstract class ChunkMapDistance {
+@@ -452,13 +452,17 @@ public abstract class ChunkMapDistance {
      // Paper end
  
      public int b() {
@@ -149,7 +149,7 @@ index 79bfcfefb..7ac4b9541 100644
      public EntityPlayer(MinecraftServer minecraftserver, WorldServer worldserver, GameProfile gameprofile, PlayerInteractManager playerinteractmanager) {
          super((World) worldserver, gameprofile);
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index a63da7513..f76136373 100644
+index a63da7513..04794f23d 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -132,6 +132,19 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -213,7 +213,7 @@ index a63da7513..f76136373 100644
      private static double a(ChunkCoordIntPair chunkcoordintpair, Entity entity) {
          double d0 = (double) (chunkcoordintpair.x * 16 + 8);
          double d1 = (double) (chunkcoordintpair.z * 16 + 8);
-@@ -1325,18 +1351,42 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1325,18 +1351,46 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          return isOutsideOfRange(chunkcoordintpair, false);
      }
  
@@ -228,11 +228,15 @@ index a63da7513..f76136373 100644
 -        double blockRange = (reducedRange) ? Math.pow(chunkRange << 4, 2) : 16384.0D;
 -        // Spigot end
 -        long i = chunkcoordintpair.pair();
-+        Object[] backingSet = playersInRange.getBackingSet();
++        if (playersInRange == null) {
++            return true;
++        }
  
 -        return !this.chunkDistanceManager.d(i) ? true : this.playerMap.a(i).noneMatch((entityplayer) -> {
 -            return !entityplayer.isSpectator() && a(chunkcoordintpair, (Entity) entityplayer) < blockRange; // Spigot
 -        });
++        Object[] backingSet = playersInRange.getBackingSet();
++
 +        if (reducedRange) {
 +            for (int i = 0, len = backingSet.length; i < len; ++i) {
 +                Object raw = backingSet[i];
