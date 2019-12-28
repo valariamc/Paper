@@ -1,4 +1,4 @@
-From 1dac7030a76873b3d21f4d35310c78abfc6984d3 Mon Sep 17 00:00:00 2001
+From 75f61a92ed244570e3ea4f143c7c5ac1c23a9115 Mon Sep 17 00:00:00 2001
 From: Aikar <aikar@aikar.co>
 Date: Mon, 28 Mar 2016 20:55:47 -0400
 Subject: [PATCH] MC Utils
@@ -1831,27 +1831,6 @@ index 260644bf0..f2a19acd8 100644
          return (long) i & 4294967295L | ((long) j & 4294967295L) << 32;
      }
  
-diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index a35f0e18b..d8420bd34 100644
---- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
-+++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-@@ -1,7 +1,6 @@
- package net.minecraft.server;
- 
- import com.google.common.collect.ImmutableList;
--import com.google.common.collect.Sets;
- import com.mojang.datafixers.util.Either;
- import it.unimi.dsi.fastutil.longs.Long2ByteMap;
- import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
-@@ -17,7 +16,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap.Entry;
- import it.unimi.dsi.fastutil.objects.ObjectIterator;
- import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
- import it.unimi.dsi.fastutil.objects.ObjectSet;
--import java.util.Set;
-+
- import java.util.concurrent.CompletableFuture;
- import java.util.concurrent.Executor;
- import javax.annotation.Nullable;
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 index 2e8a087bd..e9bcc1863 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java

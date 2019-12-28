@@ -1,4 +1,4 @@
-From 2219906035a0688cd374ac3ed703734e4877bb94 Mon Sep 17 00:00:00 2001
+From 84a86de4ddb61bafcd724881f5bf2667090bde59 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 27 Dec 2019 16:56:42 -0800
 Subject: [PATCH] PlayerNaturallySpawnCreaturesEvent and optimise
@@ -15,10 +15,10 @@ For isOutsideRange optimisation (not apart of the patch by aikar),
 we optimise the check by using a distance map
 
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 2d38d8420..c2176d724 100644
+index 2f884d706..e3f5d9fca 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-@@ -30,7 +30,7 @@ public abstract class ChunkMapDistance {
+@@ -31,7 +31,7 @@ public abstract class ChunkMapDistance {
      private final Long2ObjectMap<ObjectSet<EntityPlayer>> c = new Long2ObjectOpenHashMap();
      public final Long2ObjectOpenHashMap<ArraySetSorted<Ticket<?>>> tickets = new Long2ObjectOpenHashMap();
      private final ChunkMapDistance.a e = new ChunkMapDistance.a();
@@ -27,7 +27,7 @@ index 2d38d8420..c2176d724 100644
      //private final ChunkMapDistance.c g = new ChunkMapDistance.c(33); // Paper - no longer used
      private final java.util.Queue<PlayerChunk> pendingChunkUpdates = new java.util.LinkedList<>(); // PAIL pendingChunkUpdates // Paper - use a queue
      private final ChunkTaskQueueSorter i;
-@@ -89,7 +89,7 @@ public abstract class ChunkMapDistance {
+@@ -90,7 +90,7 @@ public abstract class ChunkMapDistance {
      protected abstract PlayerChunk a(long i, int j, @Nullable PlayerChunk playerchunk, int k);
  
      public boolean a(PlayerChunkMap playerchunkmap) {
@@ -36,7 +36,7 @@ index 2d38d8420..c2176d724 100644
          //this.g.a(); // Paper - no longer used
          int i = Integer.MAX_VALUE - this.e.a(Integer.MAX_VALUE);
          boolean flag = i != 0;
-@@ -223,7 +223,7 @@ public abstract class ChunkMapDistance {
+@@ -224,7 +224,7 @@ public abstract class ChunkMapDistance {
          ((ObjectSet) this.c.computeIfAbsent(i, (j) -> {
              return new ObjectOpenHashSet();
          })).add(entityplayer);
@@ -45,7 +45,7 @@ index 2d38d8420..c2176d724 100644
          //this.g.b(i, 0, true); // Paper - no longer used
      }
  
-@@ -234,7 +234,7 @@ public abstract class ChunkMapDistance {
+@@ -235,7 +235,7 @@ public abstract class ChunkMapDistance {
          objectset.remove(entityplayer);
          if (objectset.isEmpty()) {
              this.c.remove(i);
@@ -54,7 +54,7 @@ index 2d38d8420..c2176d724 100644
              //this.g.b(i, Integer.MAX_VALUE, false); // Paper - no longer used
          }
  
-@@ -444,13 +444,17 @@ public abstract class ChunkMapDistance {
+@@ -445,13 +445,17 @@ public abstract class ChunkMapDistance {
      // Paper end
  
      public int b() {
