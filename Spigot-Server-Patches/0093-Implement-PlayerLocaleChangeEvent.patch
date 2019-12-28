@@ -1,11 +1,11 @@
-From 9c25b107e1d3984feaf5f7b81a89c3d6f5cd47a0 Mon Sep 17 00:00:00 2001
+From 10ed4f2abbe7f7f05c5ea4e27175b5b2d713efe1 Mon Sep 17 00:00:00 2001
 From: Isaac Moore <rmsy@me.com>
 Date: Tue, 19 Apr 2016 14:09:31 -0500
 Subject: [PATCH] Implement PlayerLocaleChangeEvent
 
 
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index db89bdf90..51fb7aece 100644
+index b2cf22bdf..2713b5126 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
 @@ -37,7 +37,7 @@ import org.bukkit.inventory.MainHand;
@@ -17,7 +17,7 @@ index db89bdf90..51fb7aece 100644
      public PlayerConnection playerConnection;
      public final MinecraftServer server;
      public final PlayerInteractManager playerInteractManager;
-@@ -1433,13 +1433,20 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -1436,13 +1436,20 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
              PlayerChangedMainHandEvent event = new PlayerChangedMainHandEvent(getBukkitEntity(), getMainHand() == EnumMainHand.LEFT ? MainHand.LEFT : MainHand.RIGHT);
              this.server.server.getPluginManager().callEvent(event);
          }
@@ -65,5 +65,5 @@ index 09213efa1..6cf85f070 100644
          {
              Set<Player> ret = new HashSet<Player>();
 -- 
-2.24.1
+2.24.0.windows.2
 

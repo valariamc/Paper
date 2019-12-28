@@ -1,4 +1,4 @@
-From dafb32db7aafc0f8a2ac1501aebd2462e72dc9c1 Mon Sep 17 00:00:00 2001
+From 9d584dffc7c54b5907faf0fe1c5c3bbd534062b1 Mon Sep 17 00:00:00 2001
 From: Alfie Cleveland <alfeh@me.com>
 Date: Tue, 27 Dec 2016 01:57:57 +0000
 Subject: [PATCH] Properly fix item duplication bug
@@ -6,10 +6,10 @@ Subject: [PATCH] Properly fix item duplication bug
 Credit to prplz for figuring out the real issue
 
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index 9a4560599..39d10f870 100644
+index 6f1c428a0..bfc70e8ee 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
-@@ -1768,7 +1768,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -1771,7 +1771,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
  
      @Override
      protected boolean isFrozen() {
@@ -32,5 +32,5 @@ index 16b70221e..cc6a2aaeb 100644
      // CraftBukkit end
  
 -- 
-2.24.1
+2.24.0.windows.2
 

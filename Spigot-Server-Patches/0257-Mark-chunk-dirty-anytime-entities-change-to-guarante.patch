@@ -1,0 +1,30 @@
+From 9839c01db44ab34440cf097ef7d34ec9088fd455 Mon Sep 17 00:00:00 2001
+From: Aikar <aikar@aikar.co>
+Date: Mon, 23 Jul 2018 22:18:31 -0400
+Subject: [PATCH] Mark chunk dirty anytime entities change to guarantee it
+ saves
+
+
+diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
+index b80d33f67..cace6a1ce 100644
+--- a/src/main/java/net/minecraft/server/Chunk.java
++++ b/src/main/java/net/minecraft/server/Chunk.java
+@@ -416,6 +416,7 @@ public class Chunk implements IChunkAccess {
+         entity.chunkZ = this.loc.z;
+         this.entitySlices[k].add(entity);
+         this.entities.add(entity); // Paper - per chunk entity list
++        this.markDirty(); // Paper
+     }
+ 
+     @Override
+@@ -442,6 +443,7 @@ public class Chunk implements IChunkAccess {
+             return;
+         }
+         entityCounts.decrement(entity.getMinecraftKeyString());
++        this.markDirty(); // Paper
+         // Paper end
+     }
+ 
+-- 
+2.24.0.windows.2
+
