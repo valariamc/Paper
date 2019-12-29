@@ -1,4 +1,4 @@
-From 73919f0c0e0c569c6714594b62e46749b5efd498 Mon Sep 17 00:00:00 2001
+From 9837a488a50541579715ed18b8cbe8e66aa5cdfb Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 27 Dec 2019 16:56:42 -0800
 Subject: [PATCH] PlayerNaturallySpawnCreaturesEvent and optimise
@@ -77,15 +77,14 @@ index 0fd39350a..f9ed8a0e1 100644
  
      public String c() {
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 97950c6b6..fc143781d 100644
+index 97950c6b6..75b1e1fc2 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-@@ -649,6 +649,37 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -649,6 +649,36 @@ public class ChunkProviderServer extends IChunkProvider {
          boolean flag1 = this.world.getGameRules().getBoolean(GameRules.DO_MOB_SPAWNING) && !world.getPlayers().isEmpty(); // CraftBukkit
  
          if (!flag) {
 +            // Paper start - optimise isOutsideRange
-+            boolean spawnMonsters = this.allowMonsters && (this.world.ticksPerMonsterSpawns != 0 && this.world.getTime() % this.world.ticksPerMonsterSpawns == 0);
 +            PlayerChunkMap playerChunkMap = this.playerChunkMap;
 +            for (EntityPlayer player : this.world.players) {
 +                if (!player.affectsSpawning || player.isSpectator()) {
@@ -118,24 +117,6 @@ index 97950c6b6..fc143781d 100644
              this.world.getMethodProfiler().enter("pollingChunks");
              int k = this.world.getGameRules().getInt(GameRules.RANDOM_TICK_SPEED);
              BlockPosition blockposition = this.world.getSpawn();
-@@ -701,7 +732,7 @@ public class ChunkProviderServer extends IChunkProvider {
-                         // Paper start - timings
-                         this.world.timings.chunkRangeCheckSmall.startTiming();
-                         // note: this is just a copy of the expression in the if
--                        boolean smallRadiusOutsideRange = flag1 && (this.allowMonsters || this.allowAnimals) && this.world.getWorldBorder().isInBounds(chunk.getPos()) && !this.playerChunkMap.isOutsideOfRange(chunkcoordintpair, true);
-+                        boolean smallRadiusOutsideRange = flag1 && (spawnMonsters || this.allowAnimals) && this.world.getWorldBorder().isInBounds(chunk.getPos()) && !this.playerChunkMap.isOutsideOfRange(chunkcoordintpair, true); // Paper - implement configurable spawn interval for monsters
-                         this.world.timings.chunkRangeCheckSmall.stopTiming();
-                         if (smallRadiusOutsideRange) { // Spigot
-                             // Paper end
-@@ -735,7 +766,7 @@ public class ChunkProviderServer extends IChunkProvider {
-                                 }
-                                 // CraftBukkit end
- 
--                                if (enumcreaturetype != EnumCreatureType.MISC && (!enumcreaturetype.c() || this.allowAnimals) && (enumcreaturetype.c() || this.allowMonsters) && (!enumcreaturetype.d() || flag2)) {
-+                                if (enumcreaturetype != EnumCreatureType.MISC && (!enumcreaturetype.c() || this.allowAnimals) && (enumcreaturetype.c() || spawnMonsters) && (!enumcreaturetype.d() || flag2)) { // Paper - implement configurable spawn interval for monsters
-                                     int k1 = limit * l / ChunkProviderServer.b; // CraftBukkit - use per-world limits
- 
-                                     // Paper start - only allow spawns upto the limit per chunk and update count afterwards
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
 index 79bfcfefb..7ac4b9541 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
@@ -271,5 +252,5 @@ index a63da7513..04794f23d 100644
  
      private boolean cannotLoadChunks(EntityPlayer entityplayer) { return this.b(entityplayer); } // Paper - OBFHELPER
 -- 
-2.24.0.windows.2
+2.24.1.windows.2
 
