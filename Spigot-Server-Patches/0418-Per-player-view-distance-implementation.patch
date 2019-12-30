@@ -1,4 +1,4 @@
-From 8aabb98aa63525df3bc502f7b9093fc75b1609ff Mon Sep 17 00:00:00 2001
+From 34594a3c276dbae7727c628128446e03fa0ec6f2 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 27 Dec 2019 14:20:40 -0800
 Subject: [PATCH] Per player view distance implementation
@@ -481,7 +481,7 @@ index 054778d0b..0ff497ed7 100644
                  }
                  return either;
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 5d90ca690..a63da7513 100644
+index 5d90ca690..b5b650460 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -78,7 +78,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -532,7 +532,7 @@ index 5d90ca690..a63da7513 100644
 -
 +        // Paper start - per player view distance
 +        this.playerViewDistanceTicketMap.remove(player);
-+        this.playerViewDistanceTicketMap.remove(player);
++        this.playerViewDistanceBroadcastMap.remove(player);
 +        this.playerViewDistanceMap.remove(player);
 +        this.getChunkMapDistanceManager().playerTicketHandler.removePlayer(player);
 +        // Paper end
@@ -913,5 +913,5 @@ index 92601c581..0df0c73f7 100644
              maxBB = player.getBoundingBox().grow( maxRange, 256, maxRange );
              ActivationType.MISC.boundingBox = player.getBoundingBox().grow( miscActivationRange, 256, miscActivationRange );
 -- 
-2.24.0.windows.2
+2.24.1.windows.2
 
