@@ -1,4 +1,4 @@
-From 75f61a92ed244570e3ea4f143c7c5ac1c23a9115 Mon Sep 17 00:00:00 2001
+From 40cdec15c566ca86d30c7a53151c7be92afc9a7e Mon Sep 17 00:00:00 2001
 From: Aikar <aikar@aikar.co>
 Date: Mon, 28 Mar 2016 20:55:47 -0400
 Subject: [PATCH] MC Utils
@@ -2814,7 +2814,7 @@ index 677e3e5f6..3a1d0deb0 100644
          int j = 0;
          ChunkSection[] achunksection = chunk.getSections();
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 775359146..abdc73457 100644
+index 775359146..b0e12ce86 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -19,9 +19,9 @@ public class PlayerChunk {
@@ -2902,14 +2902,14 @@ index 775359146..abdc73457 100644
  
      public CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> getStatusFutureUnchecked(ChunkStatus chunkstatus) {
          CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> completablefuture = (CompletableFuture) this.statusFutures.get(chunkstatus.c());
-@@ -329,13 +378,27 @@ public class PlayerChunk {
+@@ -329,13 +378,26 @@ public class PlayerChunk {
  
          this.hasBeenLoaded |= flag3;
          if (!flag2 && flag3) {
 -            this.fullChunkFuture = playerchunkmap.b(this);
 +            // Paper start - cache ticking ready status
 +            int expectCreateCount = ++this.fullChunkCreateCount;
-+            this.fullChunkFuture = playerchunkmap.b(this).thenApply((either) -> {
++            this.fullChunkFuture = playerchunkmap.b(this); this.fullChunkFuture.thenAccept((either) -> {
 +                if (either.left().isPresent() && PlayerChunk.this.fullChunkCreateCount == expectCreateCount) {
 +                    // note: Here is a very good place to add callbacks to logic waiting on this.
 +                    PlayerChunk.this.isFullChunkReady = true;
@@ -2917,7 +2917,6 @@ index 775359146..abdc73457 100644
 +
 +
 +                }
-+                return either;
 +            });
 +            // Paper end
              this.a(this.fullChunkFuture);
@@ -2931,13 +2930,13 @@ index 775359146..abdc73457 100644
              this.a(((CompletableFuture<Either<Chunk, PlayerChunk.Failure>>) completablefuture).thenApply((either1) -> { // CraftBukkit - decompile error
                  playerchunkmap.getClass();
                  return either1.ifLeft(playerchunkmap::a);
-@@ -346,12 +409,25 @@ public class PlayerChunk {
+@@ -346,12 +408,24 @@ public class PlayerChunk {
          boolean flag5 = playerchunk_state1.isAtLeast(PlayerChunk.State.TICKING);
  
          if (!flag4 && flag5) {
 -            this.tickingFuture = playerchunkmap.a(this);
 +            // Paper start - cache ticking ready status
-+            this.tickingFuture = playerchunkmap.a(this).thenApply((either) -> {
++            this.tickingFuture = playerchunkmap.a(this); this.tickingFuture.thenAccept((either) -> {
 +                if (either.left().isPresent()) {
 +                    // note: Here is a very good place to add callbacks to logic waiting on this.
 +                    PlayerChunk.this.isTickingReady = true;
@@ -2946,7 +2945,6 @@ index 775359146..abdc73457 100644
 +
 +
 +                }
-+                return either;
 +            });
 +            // Paper end
              this.a(this.tickingFuture);
@@ -2958,13 +2956,13 @@ index 775359146..abdc73457 100644
              this.tickingFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
          }
  
-@@ -363,12 +439,25 @@ public class PlayerChunk {
+@@ -363,12 +437,24 @@ public class PlayerChunk {
                  throw (IllegalStateException) SystemUtils.c(new IllegalStateException());
              }
  
 -            this.entityTickingFuture = playerchunkmap.b(this.location);
 +            // Paper start - cache ticking ready status
-+            this.entityTickingFuture = playerchunkmap.b(this.location).thenApply((either) -> {
++            this.entityTickingFuture = playerchunkmap.b(this.location); this.entityTickingFuture.thenAccept((either) -> {
 +                if (either.left().isPresent()) {
 +                    // note: Here is a very good place to add callbacks to logic waiting on this.
 +                    PlayerChunk.this.isEntityTickingReady = true;
@@ -2973,7 +2971,6 @@ index 775359146..abdc73457 100644
 +
 +
 +                }
-+                return either;
 +            });
 +            // Paper end
              this.a(this.entityTickingFuture);
@@ -3296,5 +3293,5 @@ index 1aec70a1f..f72c13bed 100644
      private int initialCapacity;
  
 -- 
-2.24.0.windows.2
+2.24.1.windows.2
 

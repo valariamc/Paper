@@ -1,4 +1,4 @@
-From 34594a3c276dbae7727c628128446e03fa0ec6f2 Mon Sep 17 00:00:00 2001
+From 7b30e2492b196a4f2c0866b9c07d8dca3183c6e2 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 27 Dec 2019 14:20:40 -0800
 Subject: [PATCH] Per player view distance implementation
@@ -413,7 +413,7 @@ index 2e95069c1..aa4787d39 100644
                      double deltaX = this.locX() - player.locX();
                      double deltaZ = this.locZ() - player.locZ();
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 054778d0b..0ff497ed7 100644
+index d5fea221b..c9c24ed49 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -292,9 +292,50 @@ public class PlayerChunk {
@@ -470,7 +470,7 @@ index 054778d0b..0ff497ed7 100644
      }
  
      public CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> a(ChunkStatus chunkstatus, PlayerChunkMap playerchunkmap) {
-@@ -486,6 +527,9 @@ public class PlayerChunk {
+@@ -484,6 +525,9 @@ public class PlayerChunk {
  
  
  
@@ -479,7 +479,7 @@ index 054778d0b..0ff497ed7 100644
 +                    // Paper end
  
                  }
-                 return either;
+             });
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 index 5d90ca690..b5b650460 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java

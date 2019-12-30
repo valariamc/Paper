@@ -1,4 +1,4 @@
-From 5226a44e4d95556a1355b3cf1cc63da9a0410715 Mon Sep 17 00:00:00 2001
+From 0cc1e1708c5da2c54f1badd6d7e59e69b0bb6861 Mon Sep 17 00:00:00 2001
 From: Shane Freeder <theboyetronic@gmail.com>
 Date: Sun, 9 Jun 2019 03:53:22 +0100
 Subject: [PATCH] incremental chunk saving
@@ -108,7 +108,7 @@ index 105ac1358..4eba20b6a 100644
          this.methodProfiler.enter("snooper");
          if (((DedicatedServer) this).getDedicatedServerProperties().snooperEnabled && !this.snooper.d() && this.ticks > 100) { // Spigot
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index dfdbeea01..73311aeb5 100644
+index b34312907..c05bdacce 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -40,6 +40,9 @@ public class PlayerChunk {
@@ -141,7 +141,7 @@ index dfdbeea01..73311aeb5 100644
          if (!flag2 && flag3) {
              // Paper start - cache ticking ready status
              int expectCreateCount = ++this.fullChunkCreateCount;
-@@ -492,8 +507,32 @@ public class PlayerChunk {
+@@ -489,8 +504,32 @@ public class PlayerChunk {
      }
  
      public void m() {
@@ -317,5 +317,5 @@ index a38dcda23..f413a3498 100644
          this.checkSession();
          this.worldProvider.i();
 -- 
-2.24.0.windows.2
+2.24.1.windows.2
 
