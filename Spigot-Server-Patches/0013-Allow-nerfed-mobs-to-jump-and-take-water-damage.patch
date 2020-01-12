@@ -1,7 +1,7 @@
-From 7c8195f46ff705cfc7a46c21106ee408888467b3 Mon Sep 17 00:00:00 2001
+From d975fa6cbe80608fb3e4b26fc1e8d0a2b9bbd376 Mon Sep 17 00:00:00 2001
 From: Zach Brown <zach.brown@destroystokyo.com>
 Date: Tue, 1 Mar 2016 13:24:16 -0600
-Subject: [PATCH] Allow nerfed mobs to jump
+Subject: [PATCH] Allow nerfed mobs to jump and take water damage
 
 
 diff --git a/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java b/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
@@ -30,8 +30,20 @@ index 2e869004c..8a6856e0f 100644
      public void b() {
          this.b.setJumping(this.a);
          this.a = false;
+diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
+index bf059dc86..53a0c795d 100644
+--- a/src/main/java/net/minecraft/server/Entity.java
++++ b/src/main/java/net/minecraft/server/Entity.java
+@@ -1104,6 +1104,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         return this.isInWater() || this.isInRain();
+     }
+ 
++    public boolean isInWaterOrRainOrBubble() { return ay(); } //Paper - OBFHELPER
+     public boolean ay() {
+         return this.isInWater() || this.isInRain() || this.l();
+     }
 diff --git a/src/main/java/net/minecraft/server/EntityInsentient.java b/src/main/java/net/minecraft/server/EntityInsentient.java
-index e0434ff12..25b613249 100644
+index 7ee5eb987..68ce38d66 100644
 --- a/src/main/java/net/minecraft/server/EntityInsentient.java
 +++ b/src/main/java/net/minecraft/server/EntityInsentient.java
 @@ -32,6 +32,7 @@ public abstract class EntityInsentient extends EntityLiving {
@@ -42,14 +54,17 @@ index e0434ff12..25b613249 100644
      public PathfinderGoalSelector targetSelector;
      private EntityLiving goalTarget;
      private final EntitySenses bw;
-@@ -643,6 +644,12 @@ public abstract class EntityInsentient extends EntityLiving {
+@@ -643,6 +644,15 @@ public abstract class EntityInsentient extends EntityLiving {
          // Spigot Start
          if ( this.fromMobSpawner )
          {
-+            // Paper start - Allow nerfed mobs to jump and float
++            // Paper start - Allow nerfed mobs to jump, float and take water damage
 +            if (goalFloat != null) {
 +                if (goalFloat.validConditions()) goalFloat.update();
 +                this.getControllerJump().jumpIfSet();
++            }
++            if ((this instanceof EntityBlaze || this instanceof EntityEnderman) && isInWaterOrRainOrBubble()) {
++                damageEntity(DamageSource.DROWN, 1.0F);
 +            }
 +            // Paper end
              return;
@@ -81,5 +96,5 @@ index 0f0dc7277..43908b040 100644
      public void e() {
          if (this.a.getRandom().nextFloat() < 0.8F) {
 -- 
-2.24.0
+2.16.1.windows.4
 
