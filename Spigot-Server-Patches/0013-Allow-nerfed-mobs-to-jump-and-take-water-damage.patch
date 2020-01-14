@@ -1,4 +1,4 @@
-From d975fa6cbe80608fb3e4b26fc1e8d0a2b9bbd376 Mon Sep 17 00:00:00 2001
+From 90bf66a68c995704faaf9c802659cc17ae66a4b7 Mon Sep 17 00:00:00 2001
 From: Zach Brown <zach.brown@destroystokyo.com>
 Date: Tue, 1 Mar 2016 13:24:16 -0600
 Subject: [PATCH] Allow nerfed mobs to jump and take water damage
@@ -42,6 +42,19 @@ index bf059dc86..53a0c795d 100644
      public boolean ay() {
          return this.isInWater() || this.isInRain() || this.l();
      }
+diff --git a/src/main/java/net/minecraft/server/EntityEnderman.java b/src/main/java/net/minecraft/server/EntityEnderman.java
+index 1cc66108d..38d955b00 100644
+--- a/src/main/java/net/minecraft/server/EntityEnderman.java
++++ b/src/main/java/net/minecraft/server/EntityEnderman.java
+@@ -171,7 +171,7 @@ public class EntityEnderman extends EntityMonster {
+     @Override
+     protected void mobTick() {
+         if (this.ay()) {
+-            this.damageEntity(DamageSource.DROWN, 1.0F);
++            this.damageEntity(DamageSource.DROWN, 1.0F); //Paper - copied in patch 13 (allow nerfed mobs to jump, float and take water damage)
+         }
+ 
+         if (this.world.isDay() && this.ticksLived >= this.bA + 600) {
 diff --git a/src/main/java/net/minecraft/server/EntityInsentient.java b/src/main/java/net/minecraft/server/EntityInsentient.java
 index 7ee5eb987..68ce38d66 100644
 --- a/src/main/java/net/minecraft/server/EntityInsentient.java
