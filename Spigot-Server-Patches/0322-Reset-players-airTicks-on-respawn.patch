@@ -1,14 +1,14 @@
-From e9bd726938ab8df3acc5d60ff482d4c05899e4cc Mon Sep 17 00:00:00 2001
+From a621710ac30b03e36c7db4cd4f49f6af330fbc11 Mon Sep 17 00:00:00 2001
 From: GreenMeanie <GreenMeanieMC@gmail.com>
 Date: Sat, 20 Oct 2018 22:34:02 -0400
 Subject: [PATCH] Reset players airTicks on respawn
 
 
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 3ada74eea..0e00aa8cc 100644
+index 5d31068d7..365984bb8 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
-@@ -2327,6 +2327,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2326,6 +2326,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
      }
  
@@ -29,5 +29,5 @@ index 6a1ceaf69..fe3cb5373 100644
          this.fallDistance = 0;
          this.foodData = new FoodMetaData(this);
 -- 
-2.16.1.windows.4
+2.24.1
 
