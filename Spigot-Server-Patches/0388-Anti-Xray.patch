@@ -1,11 +1,11 @@
-From fca668c719538bda3e7b9e7a67f615e3e0822dad Mon Sep 17 00:00:00 2001
+From 7f0e5f37b7a7fea802a0a1cf1a8247fad77440f0 Mon Sep 17 00:00:00 2001
 From: stonar96 <minecraft.stonar96@gmail.com>
 Date: Mon, 20 Aug 2018 03:03:58 +0200
 Subject: [PATCH] Anti-Xray
 
 
 diff --git a/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java b/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
-index 99f1541b9..6634ef923 100644
+index 486761521..df24e3297 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
 @@ -1,7 +1,11 @@
@@ -20,7 +20,7 @@ index 99f1541b9..6634ef923 100644
  import org.bukkit.Bukkit;
  import org.bukkit.configuration.file.YamlConfiguration;
  import org.spigotmc.SpigotWorldConfig;
-@@ -500,4 +504,43 @@ public class PaperWorldConfig {
+@@ -502,4 +506,43 @@ public class PaperWorldConfig {
      private void maxAutoSaveChunksPerTick() {
          maxAutoSaveChunksPerTick = getInt("max-auto-save-chunks-per-tick", 24);
      }
@@ -1181,10 +1181,10 @@ index 000000000..37093419c
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index 14ec31f0a..863a2222f 100644
+index 4d300699f..06b4dc628 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
-@@ -315,7 +315,7 @@ public class Chunk implements IChunkAccess {
+@@ -320,7 +320,7 @@ public class Chunk implements IChunkAccess {
                  return null;
              }
  
@@ -1533,10 +1533,10 @@ index 47710067a..ef7ade797 100644
          }
  
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 6f2cca07e..7a1578afa 100644
+index 5108d3ee9..b556a8fef 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
-@@ -176,6 +176,11 @@ public class PlayerChunk {
+@@ -220,6 +220,11 @@ public class PlayerChunk {
              World world = chunk.getWorld();
  
              if (this.dirtyCount == 64) {
@@ -1548,7 +1548,7 @@ index 6f2cca07e..7a1578afa 100644
                  this.s = -1;
              }
  
-@@ -208,7 +213,7 @@ public class PlayerChunk {
+@@ -252,7 +257,7 @@ public class PlayerChunk {
                      this.a(world, blockposition);
                  }
              } else if (this.dirtyCount == 64) {
@@ -1558,10 +1558,10 @@ index 6f2cca07e..7a1578afa 100644
                  this.a(new PacketPlayOutMultiBlockChange(this.dirtyCount, this.dirtyBlocks, chunk), false);
  
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index bfaabfdfe..3825520fa 100644
+index 14dd813ed..e3c3c1d58 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-@@ -544,7 +544,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -603,7 +603,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                  PlayerChunkMap.LOGGER.error("Couldn't load chunk {}", chunkcoordintpair, exception);
              }
  
@@ -1570,7 +1570,7 @@ index bfaabfdfe..3825520fa 100644
          }, this.executor);
      }
  
-@@ -1255,7 +1255,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1322,7 +1322,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      private void a(EntityPlayer entityplayer, Packet<?>[] apacket, Chunk chunk) {
          if (apacket[0] == null) {
@@ -1580,7 +1580,7 @@ index bfaabfdfe..3825520fa 100644
          }
  
 diff --git a/src/main/java/net/minecraft/server/PlayerInteractManager.java b/src/main/java/net/minecraft/server/PlayerInteractManager.java
-index 18ff6dd68..8720dd120 100644
+index e2e5c17c2..ce4340a47 100644
 --- a/src/main/java/net/minecraft/server/PlayerInteractManager.java
 +++ b/src/main/java/net/minecraft/server/PlayerInteractManager.java
 @@ -264,6 +264,8 @@ public class PlayerInteractManager {
@@ -1636,19 +1636,19 @@ index 39339fa27..f376e2106 100644
  
          return this.j[i];
 diff --git a/src/main/java/net/minecraft/server/TicketType.java b/src/main/java/net/minecraft/server/TicketType.java
-index a905a29e7..335b64435 100644
+index f82db93f8..1d1b267f3 100644
 --- a/src/main/java/net/minecraft/server/TicketType.java
 +++ b/src/main/java/net/minecraft/server/TicketType.java
 @@ -21,6 +21,7 @@ public class TicketType<T> {
      public static final TicketType<ChunkCoordIntPair> UNKNOWN = a("unknown", Comparator.comparingLong(ChunkCoordIntPair::pair), 1);
      public static final TicketType<Unit> PLUGIN = a("plugin", (a, b) -> 0); // CraftBukkit
-     public static final TicketType<org.bukkit.plugin.Plugin> PLUGIN_TICKET = a("plugin_ticket", (plugin1, plugin2) -> plugin1.getClass().getName().compareTo(plugin2.getClass().getName())); // Craftbukkit
+     public static final TicketType<org.bukkit.plugin.Plugin> PLUGIN_TICKET = a("plugin_ticket", (plugin1, plugin2) -> plugin1.getClass().getName().compareTo(plugin2.getClass().getName())); // CraftBukkit
 +    public static final TicketType<Integer> ANTIXRAY = a("antixray", Integer::compareTo); // Paper - Anti-Xray
  
      public static <T> TicketType<T> a(String s, Comparator<T> comparator) {
          return new TicketType<>(s, comparator, 0L);
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index 2fd76add2..040610ecd 100644
+index e2cac4a92..9d604a758 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
 @@ -2,6 +2,8 @@ package net.minecraft.server;
@@ -1660,7 +1660,7 @@ index 2fd76add2..040610ecd 100644
  import com.destroystokyo.paper.event.server.ServerExceptionEvent;
  import com.destroystokyo.paper.exception.ServerInternalException;
  import com.google.common.base.MoreObjects;
-@@ -92,6 +94,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -76,6 +78,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
      public final org.spigotmc.SpigotWorldConfig spigotConfig; // Spigot
  
      public final com.destroystokyo.paper.PaperWorldConfig paperConfig; // Paper
@@ -1668,7 +1668,7 @@ index 2fd76add2..040610ecd 100644
  
      public final co.aikar.timings.WorldTimingsHandler timings; // Paper
      public static BlockPosition lastPhysicsProblem; // Spigot
-@@ -133,6 +136,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -117,6 +120,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
      protected World(WorldData worlddata, DimensionManager dimensionmanager, BiFunction<World, WorldProvider, IChunkProvider> bifunction, GameProfilerFiller gameprofilerfiller, boolean flag, org.bukkit.generator.ChunkGenerator gen, org.bukkit.World.Environment env) {
          this.spigotConfig = new org.spigotmc.SpigotWorldConfig( worlddata.getName() ); // Spigot
          this.paperConfig = new com.destroystokyo.paper.PaperWorldConfig(worlddata.getName(), this.spigotConfig); // Paper
@@ -1676,7 +1676,7 @@ index 2fd76add2..040610ecd 100644
          this.generator = gen;
          this.world = new CraftWorld((WorldServer) this, gen, env);
          this.ticksPerAnimalSpawns = this.getServer().getTicksPerAnimalSpawns(); // CraftBukkit
-@@ -363,6 +367,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -336,6 +340,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
              // CraftBukkit end
  
              IBlockData iblockdata1 = chunk.setType(blockposition, iblockdata, (i & 64) != 0, (i & 1024) == 0); // CraftBukkit custom NO_PLACE flag
@@ -1710,5 +1710,5 @@ index 7772d5900..4570ed999 100644
          return section;
      }
 -- 
-2.24.1
+2.25.0
 

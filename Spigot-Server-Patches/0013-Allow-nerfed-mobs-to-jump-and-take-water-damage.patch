@@ -1,4 +1,4 @@
-From 90bf66a68c995704faaf9c802659cc17ae66a4b7 Mon Sep 17 00:00:00 2001
+From 2a6449401d02bb779725f3de14e272847fd99f11 Mon Sep 17 00:00:00 2001
 From: Zach Brown <zach.brown@destroystokyo.com>
 Date: Tue, 1 Mar 2016 13:24:16 -0600
 Subject: [PATCH] Allow nerfed mobs to jump and take water damage
@@ -31,7 +31,7 @@ index 2e869004c..8a6856e0f 100644
          this.b.setJumping(this.a);
          this.a = false;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index bf059dc86..53a0c795d 100644
+index 5635192f7..61b72b55f 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -1104,6 +1104,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -109,5 +109,5 @@ index 0f0dc7277..43908b040 100644
      public void e() {
          if (this.a.getRandom().nextFloat() < 0.8F) {
 -- 
-2.16.1.windows.4
+2.25.0
 

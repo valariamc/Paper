@@ -1,14 +1,14 @@
-From c507b3253f2d65b838333295c00ace47fd5c8c23 Mon Sep 17 00:00:00 2001
+From c2974ae8735072bfab8a59203b89a130cb47643b Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Tue, 1 Jan 2019 02:22:01 -0800
 Subject: [PATCH] Add Heightmap API
 
 
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index 3e57546a36..59a1c6aae7 100644
+index b506f5871..406e5c60a 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
-@@ -594,8 +594,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -567,8 +567,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          }
      }
  
@@ -20,11 +20,11 @@ index 3e57546a36..59a1c6aae7 100644
  
          if (i >= -30000000 && j >= -30000000 && i < 30000000 && j < 30000000) {
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 816d59b614..0a91617290 100644
+index e92566696..c0fc11857 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-@@ -340,6 +340,29 @@ public class CraftWorld implements World {
-         return world.getHighestBlockYAt(HeightMap.Type.MOTION_BLOCKING, new BlockPosition(x, 0, z)).getY();
+@@ -337,6 +337,29 @@ public class CraftWorld implements World {
+         return world.getChunkAt(x >> 4, z >> 4).a(HeightMap.Type.MOTION_BLOCKING, x, z);
      }
  
 +    // Paper start - Implement heightmap api
@@ -54,5 +54,5 @@ index 816d59b614..0a91617290 100644
      public Location getSpawnLocation() {
          BlockPosition spawn = world.getSpawn();
 -- 
-2.24.1
+2.25.0
 
