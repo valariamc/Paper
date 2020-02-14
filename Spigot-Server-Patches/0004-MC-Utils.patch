@@ -1,4 +1,4 @@
-From c750b5ba92a117b69ce896b1147e65a79044a244 Mon Sep 17 00:00:00 2001
+From 75f4fb964a72b8e2049cec1c37193e43a31d01cf Mon Sep 17 00:00:00 2001
 From: Aikar <aikar@aikar.co>
 Date: Mon, 28 Mar 2016 20:55:47 -0400
 Subject: [PATCH] MC Utils
@@ -1851,7 +1851,7 @@ index 260644bf0..f2a19acd8 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index e8b7cc06c..4dd804e9c 100644
+index 43d0776f8..f558ae441 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -23,7 +23,7 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -2302,10 +2302,10 @@ index 75308712d..aa7501d36 100644
      // CraftBukkit end
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
 new file mode 100644
-index 000000000..9fa88d79d
+index 000000000..b93b568a2
 --- /dev/null
 +++ b/src/main/java/net/minecraft/server/MCUtil.java
-@@ -0,0 +1,386 @@
+@@ -0,0 +1,384 @@
 +package net.minecraft.server;
 +
 +import com.destroystokyo.paper.block.TargetBlockInfo;
@@ -2387,15 +2387,13 @@ index 000000000..9fa88d79d
 +    }
 +
 +    // assumes the sets have the same comparator, and if this comparator is null then assume T is Comparable
-+    public static <T> void mergeSortedSets(final java.util.function.Consumer<T> consumer, final java.util.SortedSet<T>...sets) {
-+        java.util.Comparator<? super T> comparator = sets[0].comparator();
-+        if (comparator == null) {
-+            comparator = (java.util.Comparator)java.util.Comparator.naturalOrder();
-+        }
++    public static <T> void mergeSortedSets(final java.util.function.Consumer<T> consumer, final java.util.Comparator<? super T> comparator, final java.util.SortedSet<T>...sets) {
 +        final it.unimi.dsi.fastutil.objects.ObjectRBTreeSet<T> all = new it.unimi.dsi.fastutil.objects.ObjectRBTreeSet<>(comparator);
-+        // note: this is done in log(n!) ~ nlogn time. It could be improved if it were to mimic what mergesort does.
++        // note: this is done in log(n!) ~ nlogn time. It could be improved if it were to mimick what mergesort does.
 +        for (java.util.SortedSet<T> set : sets) {
-+            all.addAll(all);
++            if (set != null) {
++                all.addAll(set);
++            }
 +        }
 +        all.forEach(consumer);
 +    }
@@ -2971,7 +2969,7 @@ index 775359146..3093154bb 100644
          }
  
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index b5a3b1001..e24889371 100644
+index 7ad30548e..93d838ec2 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -99,6 +99,35 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -3020,7 +3018,7 @@ index b5a3b1001..e24889371 100644
  
      @Override
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index ba0293512..b257e1c4e 100644
+index 0c496ee0a..6a681d694 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
 @@ -67,9 +67,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
@@ -3217,7 +3215,7 @@ index f0deeb3d2..304dfac06 100644
  
          return this.setTypeAndData(blockposition, fluid.getBlockData(), 3 | (flag ? 64 : 0));
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 32f8f2aed..2aaf679df 100644
+index d5014abc9..8a5ac6f69 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -973,6 +973,7 @@ public class WorldServer extends World {

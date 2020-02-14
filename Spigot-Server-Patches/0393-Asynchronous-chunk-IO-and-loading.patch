@@ -1,4 +1,4 @@
-From 8b70c99a921260236a4ae3fa896eb675f9c6d266 Mon Sep 17 00:00:00 2001
+From 6a5256df02a425ede51624af7ea6dbac678367c7 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Sat, 13 Jul 2019 09:23:10 -0700
 Subject: [PATCH] Asynchronous chunk IO and loading
@@ -2950,10 +2950,10 @@ index 2f95174fc..134c76065 100644
 +//    Paper end
  }
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
-index b6aeca05f..bcd5cc9f2 100644
+index 47fe25575..9c933c212 100644
 --- a/src/main/java/net/minecraft/server/MCUtil.java
 +++ b/src/main/java/net/minecraft/server/MCUtil.java
-@@ -600,4 +600,9 @@ public final class MCUtil {
+@@ -598,4 +598,9 @@ public final class MCUtil {
              out.print(fileData);
          }
      }

@@ -1,4 +1,4 @@
-From a3f2d76302dac538f98757f335ff10fb07ec1fc2 Mon Sep 17 00:00:00 2001
+From a37318ee5a0c18adc56f2e50f2fe8701605005e6 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Sat, 1 Jun 2019 13:00:55 -0700
 Subject: [PATCH] Chunk debug command
@@ -198,7 +198,7 @@ index 242ff923a..bedf47b78 100644
      public final ChunkGenerator<?> chunkGenerator;
      private final WorldServer world;
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
-index 3a482466e..b6aeca05f 100644
+index b04af7faf..47fe25575 100644
 --- a/src/main/java/net/minecraft/server/MCUtil.java
 +++ b/src/main/java/net/minecraft/server/MCUtil.java
 @@ -4,7 +4,13 @@ import com.destroystokyo.paper.block.TargetBlockInfo;
@@ -227,7 +227,7 @@ index 3a482466e..b6aeca05f 100644
  import java.util.concurrent.CompletableFuture;
  import java.util.concurrent.ExecutionException;
  import java.util.concurrent.Executor;
-@@ -424,4 +434,170 @@ public final class MCUtil {
+@@ -422,4 +432,170 @@ public final class MCUtil {
  
          return null;
      }
