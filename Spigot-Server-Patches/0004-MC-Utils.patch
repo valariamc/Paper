@@ -2389,7 +2389,7 @@ index 000000000..b93b568a2
 +    // assumes the sets have the same comparator, and if this comparator is null then assume T is Comparable
 +    public static <T> void mergeSortedSets(final java.util.function.Consumer<T> consumer, final java.util.Comparator<? super T> comparator, final java.util.SortedSet<T>...sets) {
 +        final it.unimi.dsi.fastutil.objects.ObjectRBTreeSet<T> all = new it.unimi.dsi.fastutil.objects.ObjectRBTreeSet<>(comparator);
-+        // note: this is done in log(n!) ~ nlogn time. It could be improved if it were to mimick what mergesort does.
++        // note: this is done in log(n!) ~ nlogn time. It could be improved if it were to mimic what mergesort does.
 +        for (java.util.SortedSet<T> set : sets) {
 +            if (set != null) {
 +                all.addAll(set);
