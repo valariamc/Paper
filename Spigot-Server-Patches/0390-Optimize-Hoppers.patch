@@ -459,10 +459,10 @@ index 4398f452c52182694c5e2c0945fe70ca32cb0dfd..d432de40eba2767f4ced4d9c642c9d20
  
              if (!list.isEmpty()) {
 diff --git a/src/main/java/net/minecraft/server/TileEntityLootable.java b/src/main/java/net/minecraft/server/TileEntityLootable.java
-index db86b6caf5cb927aa544d2d3ee63f1526dc8d7e9..bc5c93198399916fc4e05b9b78a02fa3fe4e937a 100644
+index d9be182a574daaedcc7a106c759c2bde2e4eb19a..c6df2318762dc6542e73f18ed9a3172ee31d96ee 100644
 --- a/src/main/java/net/minecraft/server/TileEntityLootable.java
 +++ b/src/main/java/net/minecraft/server/TileEntityLootable.java
-@@ -77,12 +77,19 @@ public abstract class TileEntityLootable extends TileEntityContainer {
+@@ -78,12 +78,19 @@ public abstract class TileEntityLootable extends TileEntityContainer {
      @Override
      public boolean isEmpty() {
          this.d((EntityHuman) null);
