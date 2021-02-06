@@ -1,0 +1,113 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Shane Freeder <theboyetronic@gmail.com>
+Date: Sat, 6 Feb 2021 23:06:43 +0000
+Subject: [PATCH] PlayerBedEnterEvent#shouldSetSpawn
+
+
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index a9a409eebabae11ab84cf9bcced1f9a030b4a479..2d138c41d35eccb77e330aa80e2ea25d21856e1c 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -31,7 +31,9 @@ import org.bukkit.craftbukkit.entity.CraftPlayer;
+ import org.bukkit.craftbukkit.event.CraftEventFactory;
+ import org.bukkit.craftbukkit.event.CraftPortalEvent;
+ import org.bukkit.craftbukkit.inventory.CraftItemStack;
++import org.bukkit.event.Event;
+ import org.bukkit.event.inventory.InventoryType;
++import org.bukkit.event.player.PlayerBedEnterEvent;
+ import org.bukkit.event.player.PlayerBedLeaveEvent;
+ import org.bukkit.event.player.PlayerChangedMainHandEvent;
+ import org.bukkit.event.player.PlayerChangedWorldEvent;
+@@ -1094,7 +1096,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+             } else if (this.b(blockposition, enumdirection)) {
+                 return Either.left(EntityHuman.EnumBedResult.OBSTRUCTED);
+             } else {
+-                this.setRespawnPosition(this.world.getDimensionKey(), blockposition, this.yaw, false, true);
++                //this.setRespawnPosition(this.world.getDimensionKey(), blockposition, this.yaw, false, true); // Paper - Move up call chain
+                 if (this.world.isDay()) {
+                     return Either.left(EntityHuman.EnumBedResult.NOT_POSSIBLE_NOW);
+                 } else {
+@@ -1132,7 +1134,21 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+             bedResult = Either.right(Unit.INSTANCE);
+         }
+ 
+-        bedResult = org.bukkit.craftbukkit.event.CraftEventFactory.callPlayerBedEnterEvent(this, blockposition, bedResult);
++        // Paper start
++        boolean shouldSetSpawn = org.bukkit.craftbukkit.event.CraftEventFactory.playerSetBedEnterEventShouldSetSpawn(bedResult);;
++
++        PlayerBedEnterEvent playerBedEnterEvent = CraftEventFactory.callPlayerBedEnterEvent(this, blockposition, bedResult, shouldSetSpawn);
++        if (playerBedEnterEvent.shouldSetSpawn()) {
++            this.setRespawnPosition(this.world.getDimensionKey(), blockposition, this.yaw, false, true);
++        }
++        // taken from CBs CraftEventFactory#callPlayerbedEnterEvent
++        if (playerBedEnterEvent.useBed() == Event.Result.ALLOW) {
++            bedResult =  Either.right(Unit.INSTANCE);
++        } else if (playerBedEnterEvent.useBed() == Event.Result.DENY) {
++            bedResult = Either.left(EntityHuman.EnumBedResult.OTHER_PROBLEM);
++        }
++        // Paper end
++
+         if (bedResult.left().isPresent()) {
+             return bedResult;
+         }
+diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+index 9ff0f70154367b99317ed3927a97ec08c7e9e015..44674703d116e47bfd9f3d0f072d670fcc0e2646 100644
+--- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
++++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+@@ -251,7 +251,7 @@ public class CraftEventFactory {
+     /**
+      * PlayerBedEnterEvent
+      */
+-    public static Either<EntityHuman.EnumBedResult, Unit> callPlayerBedEnterEvent(EntityHuman player, BlockPosition bed, Either<EntityHuman.EnumBedResult, Unit> nmsBedResult) {
++    public static PlayerBedEnterEvent callPlayerBedEnterEvent(EntityHuman player, BlockPosition bed, Either<EntityHuman.EnumBedResult, Unit> nmsBedResult, boolean shouldSetSpawn) {
+         BedEnterResult bedEnterResult = nmsBedResult.mapBoth(new Function<EntityHuman.EnumBedResult, BedEnterResult>() {
+             @Override
+             public BedEnterResult apply(EntityHuman.EnumBedResult t) {
+@@ -264,19 +264,22 @@ public class CraftEventFactory {
+                         return BedEnterResult.TOO_FAR_AWAY;
+                     case NOT_SAFE:
+                         return BedEnterResult.NOT_SAFE;
+-                        // Paper start
++                    // Paper start
+                     case OBSTRUCTED:
+                         return BedEnterResult.OBSTRUCTED;
+-                        // Paper end
++                    // Paper end
+                     default:
+                         return BedEnterResult.OTHER_PROBLEM;
+                 }
+             }
+         }, t -> BedEnterResult.OK).map(java.util.function.Function.identity(), java.util.function.Function.identity());
+ 
+-        PlayerBedEnterEvent event = new PlayerBedEnterEvent((Player) player.getBukkitEntity(), CraftBlock.at(player.world, bed), bedEnterResult);
++        PlayerBedEnterEvent event = new PlayerBedEnterEvent((Player) player.getBukkitEntity(), CraftBlock.at(player.world, bed), bedEnterResult, shouldSetSpawn);
+         Bukkit.getServer().getPluginManager().callEvent(event);
+-
++        return event;
++    }
++    public static Either<EntityHuman.EnumBedResult, Unit> callPlayerBedEnterEvent(EntityHuman player, BlockPosition bed, Either<EntityHuman.EnumBedResult, Unit> nmsBedResult) {
++        final PlayerBedEnterEvent event = callPlayerBedEnterEvent(player, bed, nmsBedResult, playerSetBedEnterEventShouldSetSpawn(nmsBedResult));
+         Result result = event.useBed();
+         if (result == Result.ALLOW) {
+             return Either.right(Unit.INSTANCE);
+@@ -287,6 +290,20 @@ public class CraftEventFactory {
+         return nmsBedResult;
+     }
+ 
++    public static boolean playerSetBedEnterEventShouldSetSpawn(Either<EntityHuman.EnumBedResult, Unit> nmsBedResult) {
++        boolean ret = true;
++        if (nmsBedResult.left().isPresent()) {
++            switch (nmsBedResult.left().get()) { // Determined from
++                case NOT_POSSIBLE_NOW:
++                case NOT_SAFE:
++                    break;
++                default:
++                    ret = false;
++            }
++            return ret;
++        }
++    }
++
+     /**
+      * Entity Enter Love Mode Event
+      */

@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Shane Freeder <theboyetronic@gmail.com>
+Date: Sat, 6 Feb 2021 23:06:54 +0000
+Subject: [PATCH] PlayerBedEnterEvent#shouldSetSpawn
+
+
+diff --git a/src/main/java/org/bukkit/event/player/PlayerBedEnterEvent.java b/src/main/java/org/bukkit/event/player/PlayerBedEnterEvent.java
+index 24b371b11347abf31fda4dadde8e0a7af60b181b..487fc77ad9ba5e1a059192898bb9b7ad1d84709b 100644
+--- a/src/main/java/org/bukkit/event/player/PlayerBedEnterEvent.java
++++ b/src/main/java/org/bukkit/event/player/PlayerBedEnterEvent.java
+@@ -57,11 +57,19 @@ public class PlayerBedEnterEvent extends PlayerEvent implements Cancellable {
+     private final Block bed;
+     private final BedEnterResult bedEnterResult;
+     private Result useBed = Result.DEFAULT;
++    private boolean shouldSetSpawn;
+ 
++    @Deprecated // Paper
+     public PlayerBedEnterEvent(@NotNull Player who, @NotNull Block bed, @NotNull BedEnterResult bedEnterResult) {
++        // Paper start
++        this(who, bed, bedEnterResult, true);
++    }
++    public PlayerBedEnterEvent(@NotNull Player who, @NotNull Block bed, @NotNull BedEnterResult bedEnterResult, boolean shouldSetSpawn) {
++        // Paper end
+         super(who);
+         this.bed = bed;
+         this.bedEnterResult = bedEnterResult;
++        this.shouldSetSpawn = shouldSetSpawn; // Paper
+     }
+ 
+     @Deprecated
+@@ -153,6 +161,29 @@ public class PlayerBedEnterEvent extends PlayerEvent implements Cancellable {
+         return bed;
+     }
+ 
++    // Paper start
++
++    /**
++     * Returns if the players spawn position should be updated to this bed
++     *
++     * @return should the spawn position of the player be updated
++     */
++    public boolean shouldSetSpawn() {
++        return shouldSetSpawn;
++    }
++
++    /**
++     * Sets if the players spawn position should be updated to this bed
++     *
++     * @param shouldSetSpawn should the spawn position of the player be updated
++     */
++    public void setShouldSetSpawn(boolean shouldSetSpawn) {
++        this.shouldSetSpawn = shouldSetSpawn;
++    }
++
++
++    // Paper end
++
+     @NotNull
+     @Override
+     public HandlerList getHandlers() {
