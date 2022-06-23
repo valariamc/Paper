@@ -1,0 +1,10 @@
+name: "Branch check"
+on: [pull_request]
+
+jobs:
+  check:
+    steps:
+      - name: check
+        if: ${{ github.head_ref == github.ref }}
+        run: exit 1
+
