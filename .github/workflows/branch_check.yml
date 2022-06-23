@@ -3,8 +3,10 @@ on: [pull_request]
 
 jobs:
   check:
+    runs-on: ubuntu-latest
     steps:
       - name: check
+
         if: ${{ github.head_ref == github.ref }}
         run: exit 1
 
